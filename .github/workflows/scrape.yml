@@ -1,0 +1,53 @@
+name: scrape
+
+# Runs every 4h. Matrix splits the 91 sources across 2 parallel jobs so we
+# stay well under the GitHub Actions 6h job limit and keep scrape latency
+# low. Phase 2 spec (§11): cron 0 */4 * * *, matrix = [1, 2], concurrency
+# cancels in-progress runs of the same group.
+
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+    inputs:
+      group:
+        description: "Optional: scrape only this group (1 or 2). Blank = both."
+        required: false
+        default: ""
+
+concurrency:
+  group: scrape-${{ github.event.inputs.group || 'all' }}
+  cancel-in-progress: true
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2]
+
+    steps:
+      - name: Skip non-matching group on manual dispatch
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.group != '' && github.event.inputs.group != format('{0}', matrix.group) }}
+        run: |
+          echo "Dispatch requested group=${{ github.event.inputs.group }}, this matrix is ${{ matrix.group }} — skipping."
+          exit 0
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: scraper/requirements.txt
+
+      - name: Install scraper dependencies
+        run: pip install -r scraper/requirements.txt
+
+      - name: Run scrape (group ${{ matrix.group }})
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scraper/scrape.py --group ${{ matrix.group }}

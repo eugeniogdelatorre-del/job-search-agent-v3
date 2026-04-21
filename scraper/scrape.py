@@ -1,20 +1,19 @@
-"""Scrape orchestrator — Phase 1.
+"""Scrape orchestrator — Phase 2.
 
 Pipeline:
-    1. Load v3 group sources from sources.json
-    2. For each source: pick a parser (greenhouse | lever in Phase 1), scrape,
-       log sources_health with timing + outcome
+    1. Load v3 group sources from sources.json (X feeds filtered at load time)
+    2. For each source: pick a parser (first matching in priority list),
+       scrape, log sources_health with timing + outcome
     3. Compute dedup_key + source_tier on each raw job
-    4. Dedup within this run (keep highest tier on collision)
-    5. Score every surviving job with the rule-based 6-dim scorer,
+    4. Junk filter + aggregator title unmasher (junk_filters.clean_jobs)
+    5. Dedup within this run (keep highest tier on collision)
+    6. Score every surviving job with the rule-based 6-dim scorer,
        reading scoring_config from Supabase (merged over DEFAULT_CONFIG)
-    6. Upsert into `jobs` with on_conflict=dedup_key
-    7. Run retention (7-day inactive, 60-day delete)
+    7. Upsert into `jobs` with on_conflict=dedup_key
+    8. Run retention (7-day inactive, 60-day delete)
 
-Phase 1 ships with only greenhouse + lever parsers; sources without a matching
-parser are logged to sources_health as success=true, jobs_found=0, with
-error_message="no_parser_phase1" so the row is distinguishable from real
-scrape failures at Checkpoint 1 time. Phase 2 adds the remaining parsers.
+Parser priority (first match wins): greenhouse > lever > ashby > workday >
+cryptojobslist > web3career > weworkremotely > generic (BS4 fallback).
 
 Usage:
     python scraper/scrape.py --group 1
@@ -36,14 +35,33 @@ if __package__ in (None, ""):
 
 import requests
 
-from scraper import retention, sources, supabase_client
+from scraper import junk_filters, retention, sources, supabase_client
 from scraper.dedup import dedup_within_run, make_dedup_key
-from scraper.parsers import greenhouse, lever
+from scraper.parsers import (
+    ashby,
+    cryptojobslist,
+    generic,
+    greenhouse,
+    lever,
+    web3career,
+    weworkremotely,
+    workday,
+)
 from scraper.parsers.base import make_session
 from scraper.score import resolve_config, score_job
 
 # Parser registry — ordered. First `can_parse(source)` match wins.
-PARSERS = [greenhouse, lever]
+# Dedicated ATS/aggregator parsers before the generic BS4 fallback.
+PARSERS = [
+    greenhouse,
+    lever,
+    ashby,
+    workday,
+    cryptojobslist,
+    web3career,
+    weworkremotely,
+    generic,
+]
 
 DELAY_BETWEEN_REQUESTS_SECONDS = 1
 
@@ -96,9 +114,9 @@ def _scrape_source(
             jobs_found=0,
             success=True,
             duration_ms=0,
-            error_message="no_parser_phase1",
+            error_message="no_parser_matched",
         )
-        print(f"  [skip] {company}: no parser in Phase 1")
+        print(f"  [skip] {company}: no parser matched")
         return []
 
     print(f"  [{parser.name}] {company}")
@@ -187,7 +205,13 @@ def main() -> int:
 
     print(f"\nraw jobs: {len(all_jobs)}")
 
-    deduped = dedup_within_run(all_jobs)
+    cleaned, cleanup_stats = junk_filters.clean_jobs(all_jobs)
+    print(
+        f"after cleanup: {len(cleaned)}  "
+        f"(junk dropped={cleanup_stats['junk_dropped']}, unmashed={cleanup_stats['unmashed']})"
+    )
+
+    deduped = dedup_within_run(cleaned)
     print(f"after dedup within run: {len(deduped)}")
 
     rows: list[dict] = []
