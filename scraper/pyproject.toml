@@ -1,0 +1,28 @@
+[project]
+name = "job-search-agent-v3-scraper"
+version = "0.1.0"
+description = "Scraper + AI classification + CV scoring pipeline for job-search-agent-v3"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["supabase.*", "pdfplumber.*"]
+ignore_missing_imports = true
