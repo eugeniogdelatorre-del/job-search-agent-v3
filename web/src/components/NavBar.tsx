@@ -8,6 +8,7 @@ const LINKS: Array<{ href: string; label: string }> = [
   { href: '/', label: 'Today' },
   { href: '/week', label: 'Week' },
   { href: '/archive', label: 'Archive' },
+  { href: '/resume', label: 'CV' },
 ]
 
 export function NavBar({ email }: { email?: string | null }) {
