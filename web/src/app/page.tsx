@@ -7,7 +7,8 @@ import { createClient } from '@/lib/supabase/server'
 import { NavBar } from '@/components/NavBar'
 import { FilterBar } from '@/components/FilterBar'
 import { JobList } from '@/components/JobList'
-import { parseFilters } from '@/lib/filters'
+import { ExportMenu } from '@/components/ExportMenu'
+import { parseFilters, filtersToSearchParams } from '@/lib/filters'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,12 +29,18 @@ export default async function TodayPage({
     <>
       <NavBar email={user.email} />
       <main className="mx-auto max-w-7xl space-y-4 p-4">
-        <div>
-          <h1 className="text-xl font-semibold">Today</h1>
-          <p className="text-sm text-muted-foreground">
-            Jobs seen in the last 24 hours, ranked by AI match score. Match
-            % populates once a CV is activated (Phase 6).
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold">Today</h1>
+            <p className="text-sm text-muted-foreground">
+              Jobs seen in the last 24 hours, ranked by AI match score. Match
+              % populates once a CV is activated (Phase 6).
+            </p>
+          </div>
+          <ExportMenu
+            scopeSinceDays={1}
+            currentSearch={filtersToSearchParams(filters).toString()}
+          />
         </div>
         <FilterBar hidePostedWithin />
         <Suspense fallback={<ListSkeleton />}>

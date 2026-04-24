@@ -6,7 +6,8 @@ import { createClient } from '@/lib/supabase/server'
 import { NavBar } from '@/components/NavBar'
 import { FilterBar } from '@/components/FilterBar'
 import { ArchiveTable } from '@/components/ArchiveTable'
-import { parseFilters } from '@/lib/filters'
+import { ExportMenu } from '@/components/ExportMenu'
+import { parseFilters, filtersToSearchParams } from '@/lib/filters'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,11 +32,17 @@ export default async function ArchivePage({
     <>
       <NavBar email={user.email} />
       <main className="mx-auto max-w-7xl space-y-4 p-4">
-        <div>
-          <h1 className="text-xl font-semibold">Archive</h1>
-          <p className="text-sm text-muted-foreground">
-            Last 60 days. Jobs cycle out after 60d per retention policy.
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold">Archive</h1>
+            <p className="text-sm text-muted-foreground">
+              Last 60 days. Jobs cycle out after 60d per retention policy.
+            </p>
+          </div>
+          <ExportMenu
+            scopeSinceDays={60}
+            currentSearch={filtersToSearchParams(filters).toString()}
+          />
         </div>
         <FilterBar />
         <Suspense fallback={null}>

@@ -1,0 +1,49 @@
+name: weekly_summary
+
+# Sundays 22:00 UTC == Sun 7pm ART (UTC-3). No AI involved — just a
+# SQL pull + Resend POST (see scraper/weekly_summary.py). Resend free
+# tier is 3000 emails/month so this is effectively free.
+#
+# No concurrency group needed; one send per week, and workflow_dispatch
+# is safe to re-run (idempotent from the user's inbox perspective — two
+# copies of the same roundup is harmless).
+
+on:
+  schedule:
+    - cron: "0 22 * * 0"
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "Set to 'true' to print HTML without sending"
+        required: false
+        default: ""
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: scraper/requirements.txt
+
+      - name: Install scraper dependencies
+        run: pip install -r scraper/requirements.txt
+
+      - name: Send weekly summary
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+        run: |
+          if [ "${{ github.event.inputs.dry }}" = "true" ]; then
+            python scraper/weekly_summary.py --dry
+          else
+            python scraper/weekly_summary.py
+          fi

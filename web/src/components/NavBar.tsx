@@ -10,6 +10,8 @@ const LINKS: Array<{ href: string; label: string }> = [
   { href: '/archive', label: 'Archive' },
   { href: '/apply', label: 'Apply' },
   { href: '/resume', label: 'CV' },
+  { href: '/tune', label: 'Tune' },
+  { href: '/settings', label: 'Settings' },
 ]
 
 export function NavBar({ email }: { email?: string | null }) {

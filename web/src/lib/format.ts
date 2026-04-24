@@ -20,3 +20,10 @@ export function formatRelativeDate(iso: string): string {
   const months = Math.round(days / 30)
   return `${months}mo ago`
 }
+
+export function formatUsd(n: number): string {
+  if (n === 0) return '$0.00'
+  if (n < 0.01) return `$${n.toFixed(4)}`
+  if (n < 1) return `$${n.toFixed(3)}`
+  return `$${n.toFixed(2)}`
+}
