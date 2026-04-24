@@ -47,18 +47,15 @@ export async function POST(req: NextRequest) {
 
   const bytes = new Uint8Array(await file.arrayBuffer())
 
-  // pdf-parse v2: PDFParse class with getText(). Dynamic import so nothing
-  // runs at module-load time.
+  // unpdf ships a serverless build of pdfjs that doesn't rely on DOM
+  // globals (DOMMatrix, Promise.withResolvers). Dynamic import so the
+  // wasm/worker glue only loads when an upload actually happens.
   let text: string
   try {
-    const { PDFParse } = await import('pdf-parse')
-    const parser = new PDFParse({ data: bytes })
-    try {
-      const result = await parser.getText()
-      text = (result.text || '').trim()
-    } finally {
-      await parser.destroy()
-    }
+    const { extractText, getDocumentProxy } = await import('unpdf')
+    const pdf = await getDocumentProxy(bytes)
+    const result = await extractText(pdf, { mergePages: true })
+    text = (Array.isArray(result.text) ? result.text.join('\n') : result.text).trim()
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'unknown'
     return NextResponse.json(
