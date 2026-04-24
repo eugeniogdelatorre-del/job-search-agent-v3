@@ -219,6 +219,10 @@ def send_via_resend(api_key: str, html: str, subject: str) -> bool:
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            # Cloudflare (in front of api.resend.com) 1010-bans the default
+            # ``Python-urllib/3.x`` UA. A generic UA passes through fine.
+            "User-Agent": "job-search-agent-v3/1.0",
+            "Accept": "application/json",
         },
         method="POST",
     )
