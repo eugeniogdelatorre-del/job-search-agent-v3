@@ -13,6 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { MatchBadge } from '@/components/MatchBadge'
+import { SaveToTrackerButton } from '@/components/SaveToTrackerButton'
 import { queryJobs } from '@/lib/jobs-query'
 import { formatRelativeDate, formatSalary } from '@/lib/format'
 import { filtersToSearchParams, type Filters } from '@/lib/filters'
@@ -121,19 +122,28 @@ export async function ArchiveTable({ filters, page }: Props) {
                     {formatRelativeDate(job.first_seen_at)}
                   </TableCell>
                   <TableCell className="text-right">
-                    {applyHref ? (
-                      <Button asChild variant="ghost" size="sm">
-                        <a
-                          href={applyHref}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </Button>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
+                    <div className="flex justify-end">
+                      <SaveToTrackerButton
+                        job_id={job.id}
+                        job_title_snapshot={job.title}
+                        company_snapshot={job.company}
+                        apply_url_snapshot={applyHref ?? null}
+                        source_snapshot={job.source}
+                      />
+                      {applyHref ? (
+                        <Button asChild variant="ghost" size="sm">
+                          <a
+                            href={applyHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        </Button>
+                      ) : (
+                        <span className="px-3 text-muted-foreground">—</span>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               )

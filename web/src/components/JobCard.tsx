@@ -5,11 +5,12 @@
 //   - strengths / gaps preview (first item of each, if present)
 //   - Apply link + Save-to-tracker stub (wired in Phase 7)
 
-import { ExternalLink, Bookmark } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { MatchBadge } from '@/components/MatchBadge'
+import { SaveToTrackerButton } from '@/components/SaveToTrackerButton'
 import { formatRelativeDate, formatSalary } from '@/lib/format'
 import type { JobWithScore } from '@/types/db'
 
@@ -84,14 +85,13 @@ export function JobCard({ job }: { job: JobWithScore }) {
             {formatRelativeDate(job.first_seen_at)} · {job.source}
           </span>
           <div className="flex gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              title="Save to tracker (Phase 7)"
-              disabled
-            >
-              <Bookmark className="h-4 w-4" />
-            </Button>
+            <SaveToTrackerButton
+              job_id={job.id}
+              job_title_snapshot={job.title}
+              company_snapshot={job.company}
+              apply_url_snapshot={applyHref ?? null}
+              source_snapshot={job.source}
+            />
             {applyHref && (
               <Button asChild size="sm">
                 <a href={applyHref} target="_blank" rel="noopener noreferrer">

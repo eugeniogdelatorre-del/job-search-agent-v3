@@ -118,3 +118,33 @@ export type JobScore = {
 export type JobWithScore = Job & {
   job_scores: Pick<JobScore, 'match_score' | 'strengths' | 'gaps' | 'verdict_one_liner'>[]
 }
+
+export type ApplicationStatus =
+  | 'saved'
+  | 'applied'
+  | 'interview'
+  | 'offer'
+  | 'rejected'
+
+export const APPLICATION_STATUSES: ApplicationStatus[] = [
+  'saved',
+  'applied',
+  'interview',
+  'offer',
+  'rejected',
+]
+
+export type Application = {
+  id: string
+  user_id: string
+  job_id: string | null
+  job_title_snapshot: string
+  company_snapshot: string | null
+  apply_url_snapshot: string | null
+  source_snapshot: string | null
+  status: ApplicationStatus
+  applied_at: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
