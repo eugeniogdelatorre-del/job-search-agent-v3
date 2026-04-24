@@ -354,7 +354,7 @@ def main() -> int:
 
     # Kill switch first — before we fetch, before we build prompts.
     try:
-        budget.assert_under_budget(sb)
+        budget.assert_under_budget(sb, operation="classify")
     except budget.BudgetExceeded as e:
         print(f"  [kill-switch] {e}", file=sys.stderr)
         return 3

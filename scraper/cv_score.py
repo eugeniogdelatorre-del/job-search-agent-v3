@@ -400,7 +400,7 @@ def main() -> int:
         return 2
 
     try:
-        budget.assert_under_budget(sb)
+        budget.assert_under_budget(sb, operation="cv_score")
     except budget.BudgetExceeded as e:
         print(f"  [kill-switch] {e}", file=sys.stderr)
         return 3

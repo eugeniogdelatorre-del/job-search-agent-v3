@@ -1,6 +1,7 @@
 // Server component. Renders a grid of JobCards for the Today/Week views.
 // Query + filter + sort logic lives in lib/jobs-query.
 
+import Link from 'next/link'
 import { JobCard } from '@/components/JobCard'
 import { queryJobs } from '@/lib/jobs-query'
 import type { Filters } from '@/lib/filters'
@@ -27,9 +28,27 @@ export async function JobList({ filters, scopeSinceDays, limit = 100 }: Props) {
   }
 
   if (rows.length === 0) {
+    const anyFiltersActive =
+      !!filters.function ||
+      !!filters.vertical ||
+      !!filters.seniority ||
+      !!filters.remote ||
+      !!filters.q ||
+      !!filters.salaryFloor ||
+      !!filters.scoreMin ||
+      !!filters.matchMin ||
+      !!filters.postedWithin
     return (
-      <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
-        No jobs match these filters.
+      <div className="space-y-2 rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+        <p>No jobs match these filters.</p>
+        {anyFiltersActive && (
+          <p>
+            <Link href="?" className="text-primary underline">
+              Reset filters
+            </Link>{' '}
+            or widen the time window.
+          </p>
+        )}
       </div>
     )
   }

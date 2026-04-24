@@ -72,7 +72,7 @@ export function ScoringConfigEditor({ initial }: { initial: unknown }) {
           Overrides merge on top of{' '}
           <code className="font-mono">DEFAULT_CONFIG</code> in{' '}
           <code className="font-mono">scraper/score.py</code>. Empty{' '}
-          <code className="font-mono">{'{}'}</code> means "use defaults."
+          <code className="font-mono">{'{}'}</code> means &quot;use defaults.&quot;
         </p>
         <div className="flex gap-2">
           <Button variant="outline" onClick={reset} disabled={!dirty || saving}>

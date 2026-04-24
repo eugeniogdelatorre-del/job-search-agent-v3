@@ -12,13 +12,20 @@ Used by classify.py, cv_score.py, and weekly_summary.py — call
 """
 from __future__ import annotations
 
+import json
+import os
 import sys
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 
 # §D4: hard kill at $8 MTD. Sits well under the $10 ceiling so we have
 # slack for the Resend alert email + any retries the scheduler fires
 # between the trip and us noticing.
 BUDGET_CAP_USD = 8.00
+
+ALERT_RECIPIENT = "eugeniogdelatorre@gmail.com"
+ALERT_FROM = os.environ.get("RESEND_FROM") or "Job Agent <onboarding@resend.dev>"
 
 
 class BudgetExceeded(RuntimeError):
@@ -54,11 +61,72 @@ def month_to_date_spend(client) -> float:
         return 0.0
 
 
-def assert_under_budget(client, cap_usd: float = BUDGET_CAP_USD) -> float:
-    """Raise BudgetExceeded if MTD >= cap. Return the MTD total on success."""
+def _send_cap_alert(spent: float, cap_usd: float, operation: str | None) -> None:
+    """Best-effort Resend email when the cap trips.
+
+    Fail-soft: any failure here must not prevent the BudgetExceeded
+    from propagating. The whole point is to stop spending; we'd rather
+    halt silently than crash in the alert path and accidentally let a
+    retry sneak through.
+    """
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key:
+        print("  [budget] RESEND_API_KEY missing; skipping alert email", file=sys.stderr)
+        return
+    op = operation or "unknown"
+    subject = f"[job-agent] Budget cap tripped — paused at ${spent:.4f}"
+    html = (
+        '<div style="font-family:system-ui,sans-serif;padding:20px;max-width:560px">'
+        "<h2>Spend cap tripped</h2>"
+        f"<p>Month-to-date AI spend has hit <strong>${spent:.4f}</strong> "
+        f"(cap ${cap_usd:.2f}). Workflow <code>{op}</code> refused to run.</p>"
+        "<p>Check <code>/settings</code> to see which operation is burning budget, "
+        "and inspect recent rows in <code>spend_tracking</code>.</p>"
+        "<p>The cap resets on the 1st of next UTC month. To resume sooner, delete "
+        "rows from <code>spend_tracking</code> for the current month (pragmatic "
+        "fallback) or raise <code>BUDGET_CAP_USD</code>.</p>"
+        "</div>"
+    )
+    payload = {
+        "from": ALERT_FROM,
+        "to": [ALERT_RECIPIENT],
+        "subject": subject,
+        "html": html,
+    }
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            print(f"  [budget] alert email sent: {resp.status}")
+    except urllib.error.HTTPError as e:
+        print(
+            f"  [budget] alert email HTTP {e.code}: {e.read()[:300]!r}",
+            file=sys.stderr,
+        )
+    except Exception as e:
+        print(f"  [budget] alert email failed: {e}", file=sys.stderr)
+
+
+def assert_under_budget(
+    client, cap_usd: float = BUDGET_CAP_USD, operation: str | None = None
+) -> float:
+    """Raise BudgetExceeded if MTD >= cap. Return the MTD total on success.
+
+    Also sends a one-shot Resend alert email on the trip (best-effort).
+    Pass ``operation`` (e.g. "classify" / "cv_score") so the alert tells
+    Eugenio which workflow refused to run.
+    """
     spent = month_to_date_spend(client)
     print(f"  [budget] MTD spend=${spent:.4f}  cap=${cap_usd:.2f}")
     if spent >= cap_usd:
+        _send_cap_alert(spent, cap_usd, operation)
         raise BudgetExceeded(
             f"MTD spend ${spent:.4f} >= cap ${cap_usd:.2f} — refusing to run"
         )
