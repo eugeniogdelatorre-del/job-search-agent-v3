@@ -45,10 +45,12 @@ function Column({
   status,
   apps,
   onEdit,
+  onDelete,
 }: {
   status: ApplicationStatus
   apps: Application[]
-  onEdit: (app: Application) => void
+  onEdit:   (app: Application) => void
+  onDelete: (id: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
   const cfg = COLUMN_CONFIG[status]
@@ -93,7 +95,7 @@ function Column({
       >
         <div className="flex flex-col gap-2 p-2">
           {apps.map((app) => (
-            <KanbanCard key={app.id} application={app} onEdit={onEdit} />
+            <KanbanCard key={app.id} application={app} onEdit={onEdit} onDelete={onDelete} />
           ))}
           {apps.length === 0 && (
             <p className="py-6 text-center font-mono text-[11px]" style={{ color: '#3A4460' }}>
@@ -162,6 +164,19 @@ export function KanbanBoard({ initial }: { initial: Application[] }) {
     }
   }
 
+  async function deleteApp(id: string) {
+    const prev = apps
+    setApps((curr) => curr.filter((a) => a.id !== id))
+    try {
+      const res = await fetch(`/api/applications?id=${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error((await res.json()).error ?? 'delete failed')
+      toast.success('Removed from tracker')
+    } catch (e) {
+      toast.error(`Could not remove: ${e instanceof Error ? e.message : 'unknown'}`)
+      setApps(prev)
+    }
+  }
+
   function openEdit(app: Application) {
     setEditing(app)
     setNotesDraft(app.notes ?? '')
@@ -194,11 +209,11 @@ export function KanbanBoard({ initial }: { initial: Application[] }) {
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div className="flex gap-3 overflow-x-auto pb-3">
           {APPLICATION_STATUSES.map((s) => (
-            <Column key={s} status={s} apps={columns[s]} onEdit={openEdit} />
+            <Column key={s} status={s} apps={columns[s]} onEdit={openEdit} onDelete={deleteApp} />
           ))}
         </div>
         <DragOverlay>
-          {active ? <KanbanCard application={active} onEdit={() => {}} /> : null}
+          {active ? <KanbanCard application={active} onEdit={() => {}} onDelete={undefined} /> : null}
         </DragOverlay>
       </DndContext>
 

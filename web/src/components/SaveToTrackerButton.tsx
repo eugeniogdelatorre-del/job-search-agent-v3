@@ -1,53 +1,75 @@
 'use client'
 
-// Bookmark button — fills amber when the job is saved to the tracker.
-// POSTs /api/applications; idempotent on job_id server-side.
+// Bookmark toggle — amber fill = saved, grey outline = not saved.
+// Pass savedApplicationId (non-null) when the server already knows the job
+// is saved. Clicking again calls DELETE to unsave.
 
 import { useState } from 'react'
 import { toast } from 'sonner'
 
 type Props = {
-  job_id:                string
-  job_title_snapshot:    string
-  company_snapshot:      string | null
-  apply_url_snapshot:    string | null
-  source_snapshot:       string | null
+  job_id:               string
+  job_title_snapshot:   string
+  company_snapshot:     string | null
+  apply_url_snapshot:   string | null
+  source_snapshot:      string | null
+  savedApplicationId?:  string | null   // non-null = already in tracker
 }
 
-export function SaveToTrackerButton(props: Props) {
-  const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle')
+export function SaveToTrackerButton({
+  savedApplicationId,
+  ...saveProps
+}: Props) {
+  const [appId, setAppId] = useState<string | null>(savedApplicationId ?? null)
+  const [busy,  setBusy]  = useState(false)
 
-  async function save() {
-    if (state !== 'idle') return
-    setState('saving')
+  async function toggle() {
+    if (busy) return
+    setBusy(true)
     try {
-      const res = await fetch('/api/applications', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(props),
-      })
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string }
-        throw new Error(body.error ?? 'save failed')
+      if (appId) {
+        // ── Unsave ──────────────────────────────────────────────
+        const res = await fetch(`/api/applications?id=${appId}`, { method: 'DELETE' })
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string }
+          throw new Error(body.error ?? 'delete failed')
+        }
+        setAppId(null)
+        toast.success('Removed from tracker')
+      } else {
+        // ── Save ─────────────────────────────────────────────────
+        const res = await fetch('/api/applications', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(saveProps),
+        })
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string }
+          throw new Error(body.error ?? 'save failed')
+        }
+        const data = (await res.json()) as {
+          application: { id: string }
+          duplicate?: boolean
+        }
+        setAppId(data.application.id)
+        toast.success(data.duplicate ? 'Already in tracker' : 'Saved to tracker')
       }
-      const data = (await res.json()) as { duplicate?: boolean }
-      setState('saved')
-      toast.success(data.duplicate ? 'Already in tracker' : 'Saved to tracker')
     } catch (e) {
-      setState('idle')
-      toast.error(e instanceof Error ? e.message : 'Could not save')
+      toast.error(e instanceof Error ? e.message : 'Could not update tracker')
+    } finally {
+      setBusy(false)
     }
   }
 
-  const isSaved = state === 'saved'
+  const isSaved = appId !== null
 
   return (
     <button
-      onClick={save}
-      disabled={state === 'saving'}
-      title={isSaved ? 'Saved' : 'Save to tracker'}
+      onClick={toggle}
+      disabled={busy}
+      title={isSaved ? 'Remove from tracker' : 'Save to tracker'}
       className="flex items-center justify-center w-7 h-7 rounded transition-opacity duration-150"
-      style={{ opacity: state === 'saving' ? 0.5 : 1 }}
+      style={{ opacity: busy ? 0.5 : 1 }}
     >
       <svg
         width="14"

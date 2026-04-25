@@ -1,20 +1,23 @@
-﻿'use client'
+'use client'
 
 // KanbanCard — dark terminal redesign. Draggable via dnd-kit.
 // Background #0A0C10 (darker than column), cyan hover border lift.
+// × button to delete/unsave from the tracker.
 
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ExternalLink, StickyNote } from 'lucide-react'
+import { ExternalLink, StickyNote, X } from 'lucide-react'
 import { formatRelativeDate } from '@/lib/format'
 import type { Application } from '@/types/db'
 
 export function KanbanCard({
   application,
   onEdit,
+  onDelete,
 }: {
   application: Application
-  onEdit: (app: Application) => void
+  onEdit:   (app: Application) => void
+  onDelete?: (id: string) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: application.id })
@@ -68,31 +71,38 @@ export function KanbanCard({
               : application.source_snapshot || ''}
           </span>
           <div className="flex shrink-0 gap-0.5">
+            {/* Notes */}
             <button
-              className="flex items-center justify-center w-6 h-6 rounded transition-colors"
-              style={{ color: '#6B7A99' }}
+              className="flex items-center justify-center w-6 h-6 rounded transition-colors text-[#6B7A99] hover:text-[#A0AABB]"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => onEdit(application)}
               title="Edit notes"
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#A0AABB' }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#6B7A99' }}
             >
               <StickyNote className="h-3 w-3" />
             </button>
+            {/* Open link */}
             {application.apply_url_snapshot && (
               <a
                 href={application.apply_url_snapshot}
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Open posting"
-                className="flex items-center justify-center w-6 h-6 rounded transition-colors"
-                style={{ color: '#6B7A99' }}
+                className="flex items-center justify-center w-6 h-6 rounded transition-colors text-[#6B7A99] hover:text-[#A0AABB]"
                 onPointerDown={(e) => e.stopPropagation()}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#A0AABB' }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#6B7A99' }}
               >
                 <ExternalLink className="h-3 w-3" />
               </a>
+            )}
+            {/* Delete / unsave */}
+            {onDelete && (
+              <button
+                className="flex items-center justify-center w-6 h-6 rounded transition-colors text-[#3A4460] hover:text-[#F87171]"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => onDelete(application.id)}
+                title="Remove from tracker"
+              >
+                <X className="h-3 w-3" />
+              </button>
             )}
           </div>
         </div>

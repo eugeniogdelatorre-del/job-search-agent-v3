@@ -30,7 +30,13 @@ function RuleBadge({ score }: { score: number }) {
   )
 }
 
-export function JobCard({ job }: { job: JobWithScore }) {
+export function JobCard({
+  job,
+  savedApplicationId,
+}: {
+  job: JobWithScore
+  savedApplicationId?: string | null
+}) {
   const [hovered,  setHovered]  = useState(false)
   const [applied,  setApplied]  = useState(false)
   const [applying, setApplying] = useState(false)
@@ -163,6 +169,7 @@ export function JobCard({ job }: { job: JobWithScore }) {
             company_snapshot={job.company}
             apply_url_snapshot={applyHref ?? null}
             source_snapshot={job.source}
+            savedApplicationId={savedApplicationId}
           />
           {applyHref && (
             <button

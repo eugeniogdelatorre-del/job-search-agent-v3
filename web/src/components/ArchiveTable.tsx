@@ -1,4 +1,6 @@
-﻿// ArchiveTable — dense dark terminal table for /archive. 50 rows/page.
+// ArchiveTable — dense dark terminal table for /archive. 50 rows/page.
+// Server component: NO event handlers anywhere in this file.
+// Pagination uses Tailwind hover classes instead.
 
 import Link from 'next/link'
 import { ExternalLink } from 'lucide-react'
@@ -6,6 +8,7 @@ import { MatchBadge } from '@/components/MatchBadge'
 import { TagPill } from '@/components/TagPill'
 import { SaveToTrackerButton } from '@/components/SaveToTrackerButton'
 import { queryJobs } from '@/lib/jobs-query'
+import { createClient } from '@/lib/supabase/server'
 import { formatRelativeDate, formatSalary } from '@/lib/format'
 import { filtersToSearchParams, type Filters } from '@/lib/filters'
 
@@ -14,6 +17,7 @@ const PAGE_SIZE = 50
 type Props = { filters: Filters; page: number }
 
 export async function ArchiveTable({ filters, page }: Props) {
+  const supabase = createClient()
   const offset = (page - 1) * PAGE_SIZE
   const { rows, total, error } = await queryJobs({
     filters,
@@ -29,6 +33,21 @@ export async function ArchiveTable({ filters, page }: Props) {
         Failed to load jobs: {error}
       </div>
     )
+  }
+
+  // Build job_id → application_id map
+  const savedMap = new Map<string, string>()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user && rows.length > 0) {
+    const jobIds = rows.map((r) => r.id)
+    const { data: apps } = await supabase
+      .from('applications')
+      .select('id, job_id')
+      .eq('user_id', user.id)
+      .in('job_id', jobIds)
+    for (const a of apps ?? []) {
+      if (a.job_id) savedMap.set(a.job_id, a.id)
+    }
   }
 
   if (rows.length === 0) {
@@ -124,6 +143,7 @@ export async function ArchiveTable({ filters, page }: Props) {
                           company_snapshot={job.company}
                           apply_url_snapshot={applyHref ?? null}
                           source_snapshot={job.source}
+                          savedApplicationId={savedMap.get(job.id) ?? null}
                         />
                         {applyHref ? (
                           <a
@@ -152,6 +172,8 @@ export async function ArchiveTable({ filters, page }: Props) {
   )
 }
 
+// Pagination uses only Tailwind classes for hover — no JS event handlers
+// (this file has no 'use client', so handlers would crash the server render).
 function Pagination({
   page,
   totalPages,
@@ -172,40 +194,29 @@ function Pagination({
   const prev = page > 1 ? mk(page - 1) : null
   const next = page < totalPages ? mk(page + 1) : null
 
-  const btnBase: React.CSSProperties = {
-    fontFamily:   'var(--font-mono)',
-    fontSize:     11,
-    fontWeight:   500,
-    borderRadius: 6,
-    padding:      '6px 14px',
-    background:   'transparent',
-    border:       '1px solid #252D40',
-    color:        '#6B7A99',
-    transition:   'color 0.15s, border-color 0.15s',
-  }
+  const btnCls =
+    'font-mono text-[11px] font-medium rounded px-3.5 py-1.5 transition-colors ' +
+    'bg-transparent border border-[#252D40] text-[#6B7A99] ' +
+    'hover:text-[#E8ECF0] hover:border-[#6B7A99]'
+
+  const btnDisabled =
+    'font-mono text-[11px] font-medium rounded px-3.5 py-1.5 ' +
+    'bg-transparent border border-[#1E2330] text-[#3A4460] cursor-default'
 
   return (
     <div className="flex items-center justify-between">
       {prev ? (
-        <Link href={prev}>
-          <button style={btnBase} onMouseEnter={(e) => { e.currentTarget.style.color = '#E8ECF0'; e.currentTarget.style.borderColor = '#6B7A99' }} onMouseLeave={(e) => { e.currentTarget.style.color = '#6B7A99'; e.currentTarget.style.borderColor = '#252D40' }}>
-            ← Prev
-          </button>
-        </Link>
+        <Link href={prev} className={btnCls}>← Prev</Link>
       ) : (
-        <button style={{ ...btnBase, opacity: 0.3, cursor: 'default' }}>← Prev</button>
+        <span className={btnDisabled}>← Prev</span>
       )}
       <span className="font-mono text-[10px]" style={{ color: '#3A4460' }}>
         Page {page} of {totalPages}
       </span>
       {next ? (
-        <Link href={next}>
-          <button style={btnBase} onMouseEnter={(e) => { e.currentTarget.style.color = '#E8ECF0'; e.currentTarget.style.borderColor = '#6B7A99' }} onMouseLeave={(e) => { e.currentTarget.style.color = '#6B7A99'; e.currentTarget.style.borderColor = '#252D40' }}>
-            Next →
-          </button>
-        </Link>
+        <Link href={next} className={btnCls}>Next →</Link>
       ) : (
-        <button style={{ ...btnBase, opacity: 0.3, cursor: 'default' }}>Next →</button>
+        <span className={btnDisabled}>Next →</span>
       )}
     </div>
   )

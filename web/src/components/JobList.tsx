@@ -1,9 +1,11 @@
-﻿// JobList — server component. Renders a 3-col grid of JobCards with the
-// Bloomberg-terminal dark skeleton and empty state per the design spec.
+// JobList — server component. Renders a 3-col grid of JobCards.
+// Also fetches the user's saved applications so the bookmark button
+// shows the correct initial state (amber = saved, toggle to unsave).
 
 import Link from 'next/link'
 import { JobCard } from '@/components/JobCard'
 import { queryJobs } from '@/lib/jobs-query'
+import { createClient } from '@/lib/supabase/server'
 import type { Filters } from '@/lib/filters'
 
 type Props = {
@@ -13,6 +15,7 @@ type Props = {
 }
 
 export async function JobList({ filters, scopeSinceDays, limit = 100 }: Props) {
+  const supabase = createClient()
   const { rows, error } = await queryJobs({ filters, scopeSinceDays, limit })
 
   if (error) {
@@ -24,6 +27,21 @@ export async function JobList({ filters, scopeSinceDays, limit = 100 }: Props) {
         Failed to load jobs: {error}
       </div>
     )
+  }
+
+  // Build job_id → application_id map so SaveToTrackerButton shows correct state
+  const savedMap = new Map<string, string>()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user && rows.length > 0) {
+    const jobIds = rows.map((r) => r.id)
+    const { data: apps } = await supabase
+      .from('applications')
+      .select('id, job_id')
+      .eq('user_id', user.id)
+      .in('job_id', jobIds)
+    for (const a of apps ?? []) {
+      if (a.job_id) savedMap.set(a.job_id, a.id)
+    }
   }
 
   if (rows.length === 0) {
@@ -55,7 +73,11 @@ export async function JobList({ filters, scopeSinceDays, limit = 100 }: Props) {
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
       {rows.map((job) => (
-        <JobCard key={job.id} job={job} />
+        <JobCard
+          key={job.id}
+          job={job}
+          savedApplicationId={savedMap.get(job.id) ?? null}
+        />
       ))}
     </div>
   )
@@ -78,17 +100,13 @@ function SkeletonCard() {
       className="flex flex-col gap-3 rounded-[10px] p-4"
       style={{ background: '#0F1117', border: '1px solid #1E2330' }}
     >
-      {/* Title */}
       <div className="skeleton" style={{ height: 16, width: '65%' }} />
-      {/* Company */}
       <div className="skeleton" style={{ height: 13, width: '45%' }} />
-      {/* Tags */}
       <div className="flex gap-1.5">
         <div className="skeleton" style={{ height: 20, width: 72, borderRadius: 20 }} />
         <div className="skeleton" style={{ height: 20, width: 56, borderRadius: 20 }} />
         <div className="skeleton" style={{ height: 20, width: 64, borderRadius: 20 }} />
       </div>
-      {/* Bottom */}
       <div className="flex items-center justify-between mt-1">
         <div className="skeleton" style={{ height: 11, width: '30%' }} />
         <div className="skeleton" style={{ height: 26, width: 68, borderRadius: 5 }} />

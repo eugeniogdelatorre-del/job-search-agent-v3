@@ -1,8 +1,8 @@
-﻿'use client'
+'use client'
 
 // FilterBar — dark redesign. Pushes changes into URL search params.
-// All inputs share dark fill + cyan focus. Uses inline styles for design-specific
-// colors; Tailwind for layout/spacing.
+// Uses CustomSelect for fully-dark dropdown popups (native <select> popup
+// can't be CSS-forced dark cross-platform).
 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useTransition } from 'react'
@@ -13,6 +13,7 @@ import {
   VERTICALS,
 } from '@/types/db'
 import { FILTER_KEYS } from '@/lib/filters'
+import { CustomSelect } from '@/components/CustomSelect'
 
 const INPUT_BASE: React.CSSProperties = {
   background:   'rgba(255,255,255,0.03)',
@@ -27,15 +28,6 @@ const INPUT_BASE: React.CSSProperties = {
   transition:   'border-color 0.15s, box-shadow 0.15s',
   colorScheme:  'dark',
 }
-
-const SELECT_BASE: React.CSSProperties = {
-  ...INPUT_BASE,
-  paddingRight:       '28px',
-  backgroundRepeat:   'no-repeat',
-  backgroundPosition: 'right 8px center',
-  cursor:             'pointer',
-  colorScheme:        'dark',
-} as React.CSSProperties
 
 function onFocus(e: React.FocusEvent<HTMLElement>) {
   e.target.style.borderColor = '#00D4FF'
@@ -90,39 +82,56 @@ export function FilterBar({ hidePostedWithin }: Props) {
       {/* Divider */}
       <div style={{ width: 1, height: 24, background: '#1E2330', flexShrink: 0 }} />
 
-      {/* Selects */}
-      <select style={SELECT_BASE} value={val('function')}  onChange={(e) => update('function',  e.target.value)} onFocus={onFocus} onBlur={onBlur}>
-        <option value="">Any function</option>
-        {FUNCTION_CATEGORIES.map((v) => <option key={v} value={v}>{v}</option>)}
-      </select>
-      <select style={SELECT_BASE} value={val('vertical')}  onChange={(e) => update('vertical',  e.target.value)} onFocus={onFocus} onBlur={onBlur}>
-        <option value="">Any vertical</option>
-        {VERTICALS.map((v) => <option key={v} value={v}>{v}</option>)}
-      </select>
-      <select style={SELECT_BASE} value={val('seniority')} onChange={(e) => update('seniority', e.target.value)} onFocus={onFocus} onBlur={onBlur}>
-        <option value="">Any seniority</option>
-        {SENIORITIES.map((v) => <option key={v} value={v}>{v}</option>)}
-      </select>
-      <select style={SELECT_BASE} value={val('remote')}    onChange={(e) => update('remote',    e.target.value)} onFocus={onFocus} onBlur={onBlur}>
-        <option value="">Any location</option>
-        {REMOTE_STATUSES.map((v) => <option key={v} value={v}>{v}</option>)}
-      </select>
+      {/* Custom dark selects */}
+      <CustomSelect
+        options={FUNCTION_CATEGORIES.map((v) => ({ value: v, label: v }))}
+        value={val('function')}
+        onChange={(v) => update('function', v)}
+        placeholder="Any function"
+        width={140}
+      />
+      <CustomSelect
+        options={VERTICALS.map((v) => ({ value: v, label: v }))}
+        value={val('vertical')}
+        onChange={(v) => update('vertical', v)}
+        placeholder="Any vertical"
+        width={140}
+      />
+      <CustomSelect
+        options={SENIORITIES.map((v) => ({ value: v, label: v }))}
+        value={val('seniority')}
+        onChange={(v) => update('seniority', v)}
+        placeholder="Any seniority"
+        width={130}
+      />
+      <CustomSelect
+        options={REMOTE_STATUSES.map((v) => ({ value: v, label: v }))}
+        value={val('remote')}
+        onChange={(v) => update('remote', v)}
+        placeholder="Any location"
+        width={130}
+      />
 
       {/* Divider */}
       <div style={{ width: 1, height: 24, background: '#1E2330', flexShrink: 0 }} />
 
       {/* Numeric inputs */}
-      <input type="number" placeholder="min $"    className="no-spin" style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('salaryFloor')} onFocus={onFocus} onBlur={(e) => { onBlur(e); update('salaryFloor', e.target.value) }} />
-      <input type="number" placeholder="rule ≥"   className="no-spin" style={{ ...INPUT_BASE, width: 72 }} min={0} defaultValue={val('scoreMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('scoreMin',    e.target.value) }} />
-      <input type="number" placeholder="match ≥"  className="no-spin" style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('matchMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('matchMin',    e.target.value) }} />
+      <input type="number" placeholder="min $"   className="no-spin" style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('salaryFloor')} onFocus={onFocus} onBlur={(e) => { onBlur(e); update('salaryFloor', e.target.value) }} />
+      <input type="number" placeholder="rule ≥"  className="no-spin" style={{ ...INPUT_BASE, width: 72 }} min={0} defaultValue={val('scoreMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('scoreMin',    e.target.value) }} />
+      <input type="number" placeholder="match ≥" className="no-spin" style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('matchMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('matchMin',    e.target.value) }} />
 
       {!hidePostedWithin && (
-        <select style={SELECT_BASE} value={val('postedWithin')} onChange={(e) => update('postedWithin', e.target.value)} onFocus={onFocus} onBlur={onBlur}>
-          <option value="">Any date</option>
-          <option value="1d">Last 24h</option>
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
-        </select>
+        <CustomSelect
+          options={[
+            { value: '1d',  label: 'Last 24h' },
+            { value: '7d',  label: 'Last 7 days' },
+            { value: '30d', label: 'Last 30 days' },
+          ]}
+          value={val('postedWithin')}
+          onChange={(v) => update('postedWithin', v)}
+          placeholder="Any date"
+          width={120}
+        />
       )}
 
       {hasFilters && (
