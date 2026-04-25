@@ -115,3 +115,12 @@
 ::-webkit-scrollbar-track  { background: #0A0C10; }
 ::-webkit-scrollbar-thumb  { background: #252D40; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #6B7A99; }
+
+/* ─── Hide number-input spin buttons ─────────────────────────────────────── */
+.no-spin::-webkit-outer-spin-button,
+.no-spin::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.no-spin { -moz-appearance: textfield; }
+
+/* ─── Hide search-input cancel / clear button ────────────────────────────── */
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; }

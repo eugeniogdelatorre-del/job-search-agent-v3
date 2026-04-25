@@ -25,6 +25,7 @@ const INPUT_BASE: React.CSSProperties = {
   height:       '34px',
   outline:      'none',
   transition:   'border-color 0.15s, box-shadow 0.15s',
+  colorScheme:  'dark',
 }
 
 const SELECT_BASE: React.CSSProperties = {
@@ -33,6 +34,7 @@ const SELECT_BASE: React.CSSProperties = {
   backgroundRepeat:   'no-repeat',
   backgroundPosition: 'right 8px center',
   cursor:             'pointer',
+  colorScheme:        'dark',
 } as React.CSSProperties
 
 function onFocus(e: React.FocusEvent<HTMLElement>) {
@@ -74,27 +76,16 @@ export function FilterBar({ hidePostedWithin }: Props) {
       style={{ background: '#0F1117', border: '1px solid #1E2330' }}
     >
       {/* Search input */}
-      <div className="relative flex items-center" style={{ flexGrow: 1, minWidth: '180px' }}>
-        <svg
-          className="absolute left-2.5 pointer-events-none"
-          width="12" height="12" viewBox="0 0 24 24"
-          fill="none" stroke="#6B7A99" strokeWidth="2"
-          strokeLinecap="round" strokeLinejoin="round"
-        >
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input
-          type="search"
-          placeholder="Search title / company"
-          className="w-full pl-8 focus:outline-none focus:ring-0"
-          style={INPUT_BASE}
-          defaultValue={val('q')}
-          onFocus={onFocus}
-          onBlur={(e) => { onBlur(e); update('q', e.target.value) }}
-          onKeyDown={(e) => { if (e.key === 'Enter') update('q', (e.target as HTMLInputElement).value) }}
-        />
-      </div>
+      <input
+        type="search"
+        placeholder="Search title / company"
+        className="focus:outline-none focus:ring-0"
+        style={{ ...INPUT_BASE, flexGrow: 1, minWidth: '180px' }}
+        defaultValue={val('q')}
+        onFocus={onFocus}
+        onBlur={(e) => { onBlur(e); update('q', e.target.value) }}
+        onKeyDown={(e) => { if (e.key === 'Enter') update('q', (e.target as HTMLInputElement).value) }}
+      />
 
       {/* Divider */}
       <div style={{ width: 1, height: 24, background: '#1E2330', flexShrink: 0 }} />
@@ -121,9 +112,9 @@ export function FilterBar({ hidePostedWithin }: Props) {
       <div style={{ width: 1, height: 24, background: '#1E2330', flexShrink: 0 }} />
 
       {/* Numeric inputs */}
-      <input type="number" placeholder="min $"    style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('salaryFloor')} onFocus={onFocus} onBlur={(e) => { onBlur(e); update('salaryFloor', e.target.value) }} />
-      <input type="number" placeholder="rule ≥"   style={{ ...INPUT_BASE, width: 64 }} min={0} defaultValue={val('scoreMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('scoreMin',    e.target.value) }} />
-      <input type="number" placeholder="match ≥"  style={{ ...INPUT_BASE, width: 64 }} min={0} defaultValue={val('matchMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('matchMin',    e.target.value) }} />
+      <input type="number" placeholder="min $"    className="no-spin" style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('salaryFloor')} onFocus={onFocus} onBlur={(e) => { onBlur(e); update('salaryFloor', e.target.value) }} />
+      <input type="number" placeholder="rule ≥"   className="no-spin" style={{ ...INPUT_BASE, width: 72 }} min={0} defaultValue={val('scoreMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('scoreMin',    e.target.value) }} />
+      <input type="number" placeholder="match ≥"  className="no-spin" style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('matchMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('matchMin',    e.target.value) }} />
 
       {!hidePostedWithin && (
         <select style={SELECT_BASE} value={val('postedWithin')} onChange={(e) => update('postedWithin', e.target.value)} onFocus={onFocus} onBlur={onBlur}>

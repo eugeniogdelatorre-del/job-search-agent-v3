@@ -72,9 +72,8 @@ export async function ArchiveTable({ filters, page }: Props) {
                 return (
                   <tr
                     key={job.id}
+                    className="transition-colors hover:bg-[#141820]"
                     style={{ borderBottom: isLast ? undefined : '1px solid #1E2330' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#141820' }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                   >
                     {/* Title */}
                     <td className="px-3 py-2.5 max-w-[220px]">
@@ -131,10 +130,7 @@ export async function ArchiveTable({ filters, page }: Props) {
                             href={applyHref}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center justify-center w-7 h-7 rounded transition-colors"
-                            style={{ color: '#6B7A99' }}
-                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#00D4FF' }}
-                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#6B7A99' }}
+                            className="flex items-center justify-center w-7 h-7 rounded transition-colors text-[#6B7A99] hover:text-[#00D4FF]"
                           >
                             <ExternalLink className="h-3.5 w-3.5" />
                           </a>
