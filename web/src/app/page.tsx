@@ -1,14 +1,16 @@
-// / — "Today" view. Last 24h, default sort match% desc (with null fallback
-// to rule-based score_total desc in Phase 5 since nothing is AI-scored yet).
+﻿// / — "Today" view. Last 24h, sorted by match% desc.
+// NavBar is in layout.tsx — not repeated here.
+// StatsBar pulls live counts from two parallel Supabase queries.
 
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { NavBar } from '@/components/NavBar'
 import { FilterBar } from '@/components/FilterBar'
-import { JobList } from '@/components/JobList'
+import { JobList, JobListSkeleton } from '@/components/JobList'
+import { StatsBar } from '@/components/StatsBar'
 import { ExportMenu } from '@/components/ExportMenu'
 import { parseFilters, filtersToSearchParams } from '@/lib/filters'
+import { queryJobs } from '@/lib/jobs-query'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,45 +20,66 @@ export default async function TodayPage({
   searchParams: Record<string, string | string[] | undefined>
 }) {
   const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   const filters = parseFilters(searchParams)
 
-  return (
-    <>
-      <NavBar email={user.email} />
-      <main className="mx-auto max-w-7xl space-y-4 p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold">Today</h1>
-            <p className="text-sm text-muted-foreground">
-              Jobs seen in the last 24 hours, ranked by AI match score. Match
-              % populates once a CV is activated (Phase 6).
-            </p>
-          </div>
-          <ExportMenu
-            scopeSinceDays={1}
-            currentSearch={filtersToSearchParams(filters).toString()}
-          />
-        </div>
-        <FilterBar hidePostedWithin />
-        <Suspense fallback={<ListSkeleton />}>
-          <JobList filters={filters} scopeSinceDays={1} limit={60} />
-        </Suspense>
-      </main>
-    </>
-  )
-}
+  // Run jobs query + applications count in parallel for the stats bar
+  const [jobsResult, appCountResult] = await Promise.all([
+    queryJobs({ filters, scopeSinceDays: 1, limit: 60, withCount: true }),
+    supabase.from('applications').select('id', { count: 'exact', head: true }),
+  ])
 
-function ListSkeleton() {
+  const { rows, total } = jobsResult
+  const indexed     = total ?? rows.length
+  const scored      = rows.filter((r) => r.job_scores?.[0]?.match_score != null).length
+  const matchScores = rows.flatMap((r) => r.job_scores ?? []).map((s) => s.match_score).filter((s): s is number => s != null)
+  const avgMatch    = matchScores.length > 0 ? Math.round(matchScores.reduce((a, b) => a + b, 0) / matchScores.length) : null
+  const rule70      = rows.filter((r) => (r.score_total ?? 0) >= 70).length
+  const savedCount  = appCountResult.count ?? 0
+
+  const now     = new Date()
+  const weekday = now.toLocaleDateString('en-US', { weekday: 'long' })
+  const date    = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="h-44 animate-pulse rounded-lg border bg-muted/40" />
-      ))}
-    </div>
+    <main className="mx-auto max-w-7xl space-y-4 p-4">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1
+            className="font-heading font-extrabold"
+            style={{ fontSize: 36, color: '#E8ECF0', letterSpacing: '-0.04em', lineHeight: 1.1 }}
+          >
+            Today
+          </h1>
+          <p className="mt-1 font-mono text-[11px]" style={{ color: '#6B7A99' }}>
+            {weekday}, {date} · {indexed} positions indexed
+          </p>
+        </div>
+        <ExportMenu
+          scopeSinceDays={1}
+          currentSearch={filtersToSearchParams(filters).toString()}
+        />
+      </div>
+
+      {/* Stats bar */}
+      <StatsBar
+        indexed={indexed}
+        scored={scored}
+        avgMatch={avgMatch}
+        rule70={rule70}
+        saved={savedCount}
+      />
+
+      {/* Filters */}
+      <FilterBar hidePostedWithin />
+
+      {/* Job grid — pre-fetched; Suspense wraps refetch on filter change */}
+      <Suspense fallback={<JobListSkeleton />}>
+        <JobList filters={filters} scopeSinceDays={1} limit={60} />
+      </Suspense>
+    </main>
   )
 }

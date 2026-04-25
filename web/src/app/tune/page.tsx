@@ -1,6 +1,4 @@
-// /tune — edit the rule-based scorer's config. Single row in
-// scoring_config (id=1), jsonb. We load it server-side and hand off
-// to a client editor.
+﻿// /tune — JSON scorer config editor. NavBar is in layout.tsx.
 
 import { createClient } from '@/lib/supabase/server'
 import { ScoringConfigEditor } from '@/components/ScoringConfigEditor'
@@ -15,29 +13,32 @@ export default async function TunePage() {
     .eq('id', 1)
     .maybeSingle()
 
-  const config = data?.config ?? {}
+  const config    = data?.config ?? {}
   const updatedAt = data?.updated_at
 
   return (
     <main className="mx-auto max-w-4xl space-y-4 px-4 py-6">
       <div className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Tune scorer</h1>
+        <div>
+          <h1
+            className="font-heading font-extrabold"
+            style={{ fontSize: 36, color: '#E8ECF0', letterSpacing: '-0.04em', lineHeight: 1.1 }}
+          >
+            Tune
+          </h1>
+          <p className="mt-1 font-mono text-[11px]" style={{ color: '#6B7A99' }}>
+            Edits take effect on the next scrape (every 4 hours)
+          </p>
+        </div>
         {updatedAt && (
-          <p className="text-xs text-muted-foreground">
+          <p className="font-mono text-[10px]" style={{ color: '#3A4460' }}>
             Last saved {new Date(updatedAt).toLocaleString()}
           </p>
         )}
       </div>
 
-      <p className="text-sm text-muted-foreground">
-        Edits take effect on the next scrape (every 4 hours). To rescore the
-        current set immediately, run the{' '}
-        <code className="font-mono text-xs">scrape.yml</code> workflow manually
-        from GitHub Actions.
-      </p>
-
       {error ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+        <div className="rounded-lg p-4 font-mono text-sm" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.3)', color: '#F87171' }}>
           Failed to load config: {error.message}
         </div>
       ) : (

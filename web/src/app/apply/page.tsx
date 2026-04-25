@@ -1,7 +1,5 @@
-// /apply — kanban tracker. Snapshot fields mean this page survives
-// the 60-day job retention sweep even if the underlying job row is
-// gone. We fetch all of the current user's applications (RLS makes
-// that automatic) and hand them to a client component for drag-drop.
+﻿// /apply — kanban tracker. NavBar is in layout.tsx.
+// Snapshot fields survive 60-day job retention sweep.
 
 import { createClient } from '@/lib/supabase/server'
 import { KanbanBoard } from '@/components/KanbanBoard'
@@ -21,29 +19,39 @@ export default async function ApplyPage() {
   return (
     <main className="mx-auto max-w-7xl space-y-4 px-4 py-6">
       <div className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Apply</h1>
-        <p className="text-sm text-muted-foreground">
-          {apps.length} tracked · drag to change status
-        </p>
+        <div>
+          <h1
+            className="font-heading font-extrabold"
+            style={{ fontSize: 36, color: '#E8ECF0', letterSpacing: '-0.04em', lineHeight: 1.1 }}
+          >
+            Apply
+          </h1>
+          <p className="mt-1 font-mono text-[11px]" style={{ color: '#6B7A99' }}>
+            {apps.length} tracked · drag to change status
+          </p>
+        </div>
       </div>
 
       {error && (
-        <p className="text-sm text-red-600">
+        <p className="font-mono text-sm" style={{ color: '#F87171' }}>
           Failed to load applications: {error.message}
         </p>
       )}
 
       {apps.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
-          Nothing saved yet. Bookmark a job from{' '}
-          <a href="/" className="underline">
-            Today
-          </a>{' '}
-          or{' '}
-          <a href="/archive" className="underline">
-            Archive
-          </a>{' '}
-          to start tracking.
+        <div
+          className="rounded-[10px] border p-10 text-center"
+          style={{ borderStyle: 'dashed', borderColor: '#252D40' }}
+        >
+          <p className="font-mono text-[13px]" style={{ color: '#6B7A99' }}>
+            nothing saved yet
+          </p>
+          <p className="mt-1 font-mono text-[11px]" style={{ color: '#3A4460' }}>
+            bookmark a job from{' '}
+            <a href="/" style={{ color: '#6B7A99', textDecoration: 'underline' }}>Today</a>
+            {' '}or{' '}
+            <a href="/archive" style={{ color: '#6B7A99', textDecoration: 'underline' }}>Archive</a>
+          </p>
         </div>
       ) : (
         <KanbanBoard initial={apps} />

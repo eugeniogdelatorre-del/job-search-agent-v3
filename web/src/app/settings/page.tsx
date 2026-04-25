@@ -1,5 +1,4 @@
-// /settings — MTD spend chart, per-source health, account info.
-// All server-side reads use the authed SSR client (RLS sees the user).
+﻿// /settings — MTD spend chart, per-source health, account info. NavBar in layout.tsx.
 
 import { createClient } from '@/lib/supabase/server'
 import { SpendChart } from '@/components/SpendChart'
@@ -9,15 +8,10 @@ export const dynamic = 'force-dynamic'
 
 export default async function SettingsPage() {
   const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  const now = new Date()
-  const monthStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
-  )
+  const now        = new Date()
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
 
   const [spendRes, healthRes] = await Promise.all([
     supabase
@@ -25,36 +19,33 @@ export default async function SettingsPage() {
       .select('run_at, operation, model, cost_usd')
       .gte('run_at', monthStart.toISOString())
       .order('run_at', { ascending: true }),
-    // 14 days of source health is enough to surface the latest per source
-    // plus recent failure context.
     supabase
       .from('sources_health')
       .select('source, run_at, jobs_found, success, error_message, duration_ms')
-      .gte(
-        'run_at',
-        new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString()
-      )
+      .gte('run_at', new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString())
       .order('run_at', { ascending: false })
       .limit(1000),
   ])
 
   const spendRows = spendRes.data ?? []
-  const mtdUsd = spendRows.reduce(
-    (acc, r) => acc + Number(r.cost_usd ?? 0),
-    0
-  )
+  const mtdUsd    = spendRows.reduce((acc, r) => acc + Number(r.cost_usd ?? 0), 0)
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1
+          className="font-heading font-extrabold"
+          style={{ fontSize: 36, color: '#E8ECF0', letterSpacing: '-0.04em', lineHeight: 1.1 }}
+        >
+          Settings
+        </h1>
+        <p className="mt-1 font-mono text-[11px]" style={{ color: '#6B7A99' }}>
           Signed in as {user?.email ?? 'unknown'}
         </p>
       </div>
 
       {spendRes.error ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+        <div className="rounded-lg p-4 font-mono text-sm" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.3)', color: '#F87171' }}>
           Spend load failed: {spendRes.error.message}
         </div>
       ) : (
@@ -62,19 +53,23 @@ export default async function SettingsPage() {
       )}
 
       {healthRes.error ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+        <div className="rounded-lg p-4 font-mono text-sm" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.3)', color: '#F87171' }}>
           Source health load failed: {healthRes.error.message}
         </div>
       ) : (
         <SourceHealthTable rows={healthRes.data ?? []} />
       )}
 
-      <div className="rounded-lg border bg-card p-4 text-sm">
-        <h2 className="text-base font-semibold">Account</h2>
-        <p className="mt-1 text-muted-foreground">
-          Single-user install. Magic-link only. Rotate API keys by setting the
-          relevant secret in GitHub (Actions) and Vercel (Project → Environment
-          Variables). Data retention is 60 days on jobs — applications carry
+      <div
+        className="rounded-[10px] p-4"
+        style={{ background: '#0F1117', border: '1px solid #1E2330' }}
+      >
+        <h2 className="font-heading font-bold text-sm" style={{ color: '#E8ECF0' }}>
+          Account
+        </h2>
+        <p className="mt-2 font-body text-xs leading-relaxed" style={{ color: '#6B7A99' }}>
+          Single-user install · magic-link only · rotate API keys in GitHub (Actions) and Vercel
+          (Project → Environment Variables) · data retention is 60 days on jobs, applications carry
           snapshot fields so the tracker survives deletion.
         </p>
       </div>

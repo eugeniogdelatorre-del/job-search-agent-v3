@@ -1,9 +1,8 @@
-// Five-column kanban: Saved → Applied → Interview → Offer / Rejected.
-// Uses dnd-kit for drag-drop. When a card moves to a new column we
-// optimistically update local state and PATCH /api/applications.
-// Edits (notes text) happen via a dialog launched from KanbanCard.
+﻿'use client'
 
-'use client'
+// KanbanBoard — 5-column drag-drop tracker. Column headers get the design-spec
+// colored dot + mono label. Cards use the dark KanbanCard component.
+// dnd-kit drag-drop and notes dialog logic is unchanged from Phase 7.
 
 import { useState } from 'react'
 import {
@@ -33,12 +32,13 @@ import {
   type ApplicationStatus,
 } from '@/types/db'
 
-const COLUMN_LABELS: Record<ApplicationStatus, string> = {
-  saved: 'Saved',
-  applied: 'Applied',
-  interview: 'Interview',
-  offer: 'Offer',
-  rejected: 'Rejected',
+// Per-column colors and labels per design spec
+const COLUMN_CONFIG: Record<ApplicationStatus, { label: string; dot: string }> = {
+  saved:     { label: 'Saved',     dot: '#6B7A99' },
+  applied:   { label: 'Applied',   dot: '#00D4FF' },
+  interview: { label: 'Interview', dot: '#A78BFA' },
+  offer:     { label: 'Offer',     dot: '#4ADE80' },
+  rejected:  { label: 'Rejected',  dot: '#F87171' },
 }
 
 function Column({
@@ -51,29 +51,53 @@ function Column({
   onEdit: (app: Application) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status })
+  const cfg = COLUMN_CONFIG[status]
+
   return (
     <div
       ref={setNodeRef}
-      className={`flex min-h-[60vh] w-72 shrink-0 flex-col gap-2 rounded-lg border bg-muted/30 p-2 transition-colors ${
-        isOver ? 'bg-muted' : ''
-      }`}
+      className="flex flex-col rounded-[10px] overflow-hidden"
+      style={{
+        background:  isOver ? '#141820' : '#0F1117',
+        border:      `1px solid ${isOver ? '#252D40' : '#1E2330'}`,
+        minHeight:   '60vh',
+        flex:        '1 1 0',
+        minWidth:    200,
+        transition:  'background 0.15s, border-color 0.15s',
+      }}
     >
-      <div className="flex items-center justify-between px-1 pb-1">
-        <h3 className="text-sm font-semibold">{COLUMN_LABELS[status]}</h3>
-        <span className="text-xs text-muted-foreground">{apps.length}</span>
+      {/* Column header */}
+      <div
+        className="flex items-center justify-between px-3 py-2.5"
+        style={{ borderBottom: '1px solid #1E2330' }}
+      >
+        <div className="flex items-center gap-2">
+          <div
+            className="rounded-full"
+            style={{ width: 7, height: 7, background: cfg.dot, flexShrink: 0 }}
+          />
+          <span className="font-mono text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#A0AABB' }}>
+            {cfg.label}
+          </span>
+        </div>
+        <span className="font-mono text-[10px]" style={{ color: '#3A4460' }}>
+          {apps.length}
+        </span>
       </div>
+
+      {/* Cards */}
       <SortableContext
         id={status}
         items={apps.map((a) => a.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 p-2">
           {apps.map((app) => (
             <KanbanCard key={app.id} application={app} onEdit={onEdit} />
           ))}
           {apps.length === 0 && (
-            <p className="px-1 py-6 text-center text-xs text-muted-foreground">
-              Nothing here
+            <p className="py-6 text-center font-mono text-[11px]" style={{ color: '#3A4460' }}>
+              empty
             </p>
           )}
         </div>
@@ -83,9 +107,9 @@ function Column({
 }
 
 export function KanbanBoard({ initial }: { initial: Application[] }) {
-  const [apps, setApps] = useState<Application[]>(initial)
-  const [activeId, setActiveId] = useState<string | null>(null)
-  const [editing, setEditing] = useState<Application | null>(null)
+  const [apps,       setApps]       = useState<Application[]>(initial)
+  const [activeId,   setActiveId]   = useState<string | null>(null)
+  const [editing,    setEditing]    = useState<Application | null>(null)
   const [notesDraft, setNotesDraft] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
 
@@ -94,11 +118,7 @@ export function KanbanBoard({ initial }: { initial: Application[] }) {
   )
 
   const columns: Record<ApplicationStatus, Application[]> = {
-    saved: [],
-    applied: [],
-    interview: [],
-    offer: [],
-    rejected: [],
+    saved: [], applied: [], interview: [], offer: [], rejected: [],
   }
   for (const a of apps) columns[a.status].push(a)
 
@@ -110,32 +130,23 @@ export function KanbanBoard({ initial }: { initial: Application[] }) {
     setActiveId(null)
     const { active, over } = ev
     if (!over) return
-    const appId = String(active.id)
-    const overId = String(over.id)
-
-    // over.id is either a column id or another card id — normalize to column.
-    const targetStatus: ApplicationStatus = (
-      APPLICATION_STATUSES as string[]
-    ).includes(overId)
+    const appId    = String(active.id)
+    const overId   = String(over.id)
+    const targetStatus: ApplicationStatus = (APPLICATION_STATUSES as string[]).includes(overId)
       ? (overId as ApplicationStatus)
       : apps.find((a) => a.id === overId)?.status ?? 'saved'
-
     const moving = apps.find((a) => a.id === appId)
     if (!moving || moving.status === targetStatus) return
-
-    const previousStatus = moving.status
+    const previousStatus     = moving.status
     const optimisticAppliedAt =
       targetStatus === 'applied' && !moving.applied_at
         ? new Date().toISOString()
         : moving.applied_at
     setApps((curr) =>
       curr.map((a) =>
-        a.id === appId
-          ? { ...a, status: targetStatus, applied_at: optimisticAppliedAt }
-          : a
+        a.id === appId ? { ...a, status: targetStatus, applied_at: optimisticAppliedAt } : a
       )
     )
-
     try {
       const res = await fetch('/api/applications', {
         method: 'PATCH',
@@ -147,9 +158,7 @@ export function KanbanBoard({ initial }: { initial: Application[] }) {
       setApps((curr) => curr.map((a) => (a.id === appId ? application : a)))
     } catch (e) {
       toast.error(`Could not move card: ${e instanceof Error ? e.message : 'unknown'}`)
-      setApps((curr) =>
-        curr.map((a) => (a.id === appId ? { ...a, status: previousStatus } : a))
-      )
+      setApps((curr) => curr.map((a) => (a.id === appId ? { ...a, status: previousStatus } : a)))
     }
   }
 
@@ -169,9 +178,7 @@ export function KanbanBoard({ initial }: { initial: Application[] }) {
       })
       if (!res.ok) throw new Error((await res.json()).error ?? 'save failed')
       const { application } = (await res.json()) as { application: Application }
-      setApps((curr) =>
-        curr.map((a) => (a.id === application.id ? application : a))
-      )
+      setApps((curr) => curr.map((a) => (a.id === application.id ? application : a)))
       setEditing(null)
     } catch (e) {
       toast.error(`Could not save: ${e instanceof Error ? e.message : 'unknown'}`)
@@ -184,27 +191,21 @@ export function KanbanBoard({ initial }: { initial: Application[] }) {
 
   return (
     <>
-      <DndContext
-        sensors={sensors}
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
-      >
+      <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div className="flex gap-3 overflow-x-auto pb-3">
           {APPLICATION_STATUSES.map((s) => (
             <Column key={s} status={s} apps={columns[s]} onEdit={openEdit} />
           ))}
         </div>
         <DragOverlay>
-          {active ? (
-            <KanbanCard application={active} onEdit={() => {}} />
-          ) : null}
+          {active ? <KanbanCard application={active} onEdit={() => {}} /> : null}
         </DragOverlay>
       </DndContext>
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle style={{ fontFamily: 'var(--font-heading)', color: '#E8ECF0' }}>
               {editing?.job_title_snapshot ?? 'Edit notes'}
             </DialogTitle>
           </DialogHeader>
@@ -213,14 +214,17 @@ export function KanbanBoard({ initial }: { initial: Application[] }) {
             onChange={(e) => setNotesDraft(e.target.value)}
             rows={8}
             placeholder="Notes to yourself…"
-            className="w-full rounded-md border border-input bg-background p-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="w-full rounded-md p-2 text-sm focus-visible:outline-none"
+            style={{
+              background: '#141820',
+              border: '1px solid #252D40',
+              color: '#E8ECF0',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 12,
+            }}
           />
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setEditing(null)}
-              disabled={savingNotes}
-            >
+            <Button variant="outline" onClick={() => setEditing(null)} disabled={savingNotes}>
               Cancel
             </Button>
             <Button onClick={saveNotes} disabled={savingNotes}>

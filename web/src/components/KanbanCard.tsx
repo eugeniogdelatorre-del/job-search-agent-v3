@@ -1,14 +1,11 @@
-// One application card inside a kanban column. Draggable via dnd-kit.
-// Shows title, company, source, applied_at if set, and an edit button that
-// opens a dialog for notes.
+﻿'use client'
 
-'use client'
+// KanbanCard — dark terminal redesign. Draggable via dnd-kit.
+// Background #0A0C10 (darker than column), cyan hover border lift.
 
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ExternalLink, StickyNote } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { formatRelativeDate } from '@/lib/format'
 import type { Application } from '@/types/db'
 
@@ -30,68 +27,86 @@ export function KanbanCard({
 
   return (
     <div ref={setNodeRef} style={style}>
-      <Card className="cursor-grab active:cursor-grabbing">
-        <CardContent className="space-y-2 p-3">
-          <div
-            className="space-y-0.5"
-            {...attributes}
-            {...listeners}
+      <div
+        className="rounded-[8px] p-3 cursor-grab active:cursor-grabbing group"
+        style={{
+          background:  '#0A0C10',
+          border:      '1px solid #1E2330',
+          transition:  'border-color 0.18s, box-shadow 0.18s',
+        }}
+        onMouseEnter={(e) => {
+          const el = e.currentTarget as HTMLElement
+          el.style.borderColor = 'rgba(0,212,255,0.35)'
+          el.style.boxShadow   = '0 0 0 1px rgba(0,212,255,0.1)'
+        }}
+        onMouseLeave={(e) => {
+          const el = e.currentTarget as HTMLElement
+          el.style.borderColor = '#1E2330'
+          el.style.boxShadow   = 'none'
+        }}
+      >
+        {/* Drag handle area */}
+        <div className="space-y-0.5 mb-2" {...attributes} {...listeners}>
+          <p
+            className="line-clamp-2 font-heading font-bold text-[13px] leading-snug"
+            style={{ color: '#E8ECF0', letterSpacing: '-0.02em' }}
           >
-            <p className="line-clamp-2 text-sm font-medium leading-snug">
-              {application.job_title_snapshot}
-            </p>
-            {application.company_snapshot && (
-              <p className="truncate text-xs text-muted-foreground">
-                {application.company_snapshot}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between gap-1 text-xs text-muted-foreground">
-            <span className="truncate">
-              {application.applied_at
-                ? `Applied ${formatRelativeDate(application.applied_at)}`
-                : application.source_snapshot || ''}
-            </span>
-            <div className="flex shrink-0 gap-0.5">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 w-7 p-0"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => onEdit(application)}
-                title="Edit notes"
-              >
-                <StickyNote className="h-3.5 w-3.5" />
-              </Button>
-              {application.apply_url_snapshot && (
-                <Button
-                  asChild
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 w-7 p-0"
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  <a
-                    href={application.apply_url_snapshot}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Open posting"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {application.notes && (
-            <p className="line-clamp-2 rounded bg-muted p-1.5 text-xs text-muted-foreground">
-              {application.notes}
+            {application.job_title_snapshot}
+          </p>
+          {application.company_snapshot && (
+            <p className="truncate font-body text-[11px]" style={{ color: '#6B7A99' }}>
+              {application.company_snapshot}
             </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+
+        {/* Bottom row */}
+        <div className="flex items-center justify-between gap-1">
+          <span className="truncate font-mono text-[10px]" style={{ color: '#3A4460' }}>
+            {application.applied_at
+              ? `Applied ${formatRelativeDate(application.applied_at)}`
+              : application.source_snapshot || ''}
+          </span>
+          <div className="flex shrink-0 gap-0.5">
+            <button
+              className="flex items-center justify-center w-6 h-6 rounded transition-colors"
+              style={{ color: '#6B7A99' }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => onEdit(application)}
+              title="Edit notes"
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#A0AABB' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#6B7A99' }}
+            >
+              <StickyNote className="h-3 w-3" />
+            </button>
+            {application.apply_url_snapshot && (
+              <a
+                href={application.apply_url_snapshot}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open posting"
+                className="flex items-center justify-center w-6 h-6 rounded transition-colors"
+                style={{ color: '#6B7A99' }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#A0AABB' }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#6B7A99' }}
+              >
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Notes preview */}
+        {application.notes && (
+          <p
+            className="mt-2 line-clamp-2 rounded px-1.5 py-1 font-mono text-[10px] leading-relaxed"
+            style={{ background: '#141820', color: '#6B7A99' }}
+          >
+            {application.notes}
+          </p>
+        )}
+      </div>
     </div>
   )
 }

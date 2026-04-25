@@ -1,20 +1,17 @@
-// Small client button that POSTs /api/applications with the snapshot
-// fields from the current job row. Idempotent on job_id server-side,
-// so double-clicking a bookmark is safe.
-
 'use client'
 
+// Bookmark button — fills amber when the job is saved to the tracker.
+// POSTs /api/applications; idempotent on job_id server-side.
+
 import { useState } from 'react'
-import { Bookmark, BookmarkCheck } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
 
 type Props = {
-  job_id: string
-  job_title_snapshot: string
-  company_snapshot: string | null
-  apply_url_snapshot: string | null
-  source_snapshot: string | null
+  job_id:                string
+  job_title_snapshot:    string
+  company_snapshot:      string | null
+  apply_url_snapshot:    string | null
+  source_snapshot:       string | null
 }
 
 export function SaveToTrackerButton(props: Props) {
@@ -42,17 +39,28 @@ export function SaveToTrackerButton(props: Props) {
     }
   }
 
-  const Icon = state === 'saved' ? BookmarkCheck : Bookmark
+  const isSaved = state === 'saved'
 
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      title={state === 'saved' ? 'Saved' : 'Save to tracker'}
-      disabled={state !== 'idle'}
+    <button
       onClick={save}
+      disabled={state === 'saving'}
+      title={isSaved ? 'Saved' : 'Save to tracker'}
+      className="flex items-center justify-center w-7 h-7 rounded transition-opacity duration-150"
+      style={{ opacity: state === 'saving' ? 0.5 : 1 }}
     >
-      <Icon className="h-4 w-4" />
-    </Button>
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill={isSaved ? '#F5A623' : 'none'}
+        stroke={isSaved ? '#F5A623' : '#6B7A99'}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+      </svg>
+    </button>
   )
 }

@@ -1,107 +1,193 @@
-// A single job posting. Composes:
-//   - title / company / location / salary
-//   - function / vertical / seniority / remote badges (whichever are present)
-//   - MatchBadge (null-tolerant; Phase 6 fills it in)
-//   - strengths / gaps preview (first item of each, if present)
-//   - Apply link + Save-to-tracker stub (wired in Phase 7)
+﻿'use client'
 
-import { ExternalLink } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+// JobCard — Bloomberg-terminal dark redesign.
+// Hover: cyan border glow + translateY(-1px) + top shimmer line.
+// Apply button toggles to "applied ✓" state and persists via /api/applications.
+
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { TagPill } from '@/components/TagPill'
 import { MatchBadge } from '@/components/MatchBadge'
 import { SaveToTrackerButton } from '@/components/SaveToTrackerButton'
 import { formatRelativeDate, formatSalary } from '@/lib/format'
 import type { JobWithScore } from '@/types/db'
 
+// Rule badge — amber ≥ 70, mid 50–69, dim < 50
+function RuleBadge({ score }: { score: number }) {
+  const style =
+    score >= 70
+      ? { color: '#F5A623', background: 'rgba(245,166,35,0.10)', borderColor: 'rgba(245,166,35,0.3)' }
+      : score >= 50
+      ? { color: '#A0AABB', background: 'rgba(160,170,187,0.07)', borderColor: 'rgba(160,170,187,0.2)' }
+      : { color: '#3A4460', background: 'transparent', borderColor: '#1E2330' }
+  return (
+    <span
+      className="inline-flex items-center rounded border px-[7px] py-0.5 font-mono text-[10px] font-medium"
+      style={style}
+    >
+      rule: {score}
+    </span>
+  )
+}
+
 export function JobCard({ job }: { job: JobWithScore }) {
-  const score = job.job_scores?.[0]
-  const salary = formatSalary(job.salary_min_usd, job.salary_max_usd)
-  const applyHref = job.apply_url ?? job.source_url ?? undefined
+  const [hovered,  setHovered]  = useState(false)
+  const [applied,  setApplied]  = useState(false)
+  const [applying, setApplying] = useState(false)
+
+  const score      = job.job_scores?.[0]
+  const salary     = formatSalary(job.salary_min_usd, job.salary_max_usd)
+  const applyHref  = job.apply_url ?? job.source_url ?? undefined
+
+  async function handleApply() {
+    if (applied || applying || !applyHref) return
+    // Open the link
+    window.open(applyHref, '_blank', 'noopener,noreferrer')
+    setApplying(true)
+    try {
+      await fetch('/api/applications', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          job_id:                job.id,
+          job_title_snapshot:    job.title,
+          company_snapshot:      job.company,
+          apply_url_snapshot:    applyHref,
+          source_snapshot:       job.source,
+        }),
+      })
+      setApplied(true)
+    } catch {
+      toast.error('Could not save to tracker')
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  // Tags: function, vertical, seniority (skip Unspecified), remote (skip Unspecified)
+  const tags = (
+    [job.function_category, job.vertical,
+      job.seniority !== 'Unspecified' ? job.seniority : null,
+      job.remote_status !== 'Unspecified' ? job.remote_status : null,
+    ] as (string | null)[]
+  ).filter((t): t is string => t !== null && t !== undefined)
 
   return (
-    <Card className="flex flex-col">
-      <CardContent className="flex flex-1 flex-col gap-3 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="truncate text-base font-semibold leading-tight">
-              {job.title}
-            </h3>
-            <p className="mt-1 truncate text-sm text-muted-foreground">
-              {job.company ?? 'Unknown company'}
-              {job.location ? ` · ${job.location}` : ''}
-            </p>
-          </div>
-          <MatchBadge score={score?.match_score ?? null} />
-        </div>
+    <div
+      className="relative flex flex-col gap-2.5 rounded-[10px] p-4 cursor-default select-none"
+      style={{
+        background:  '#0F1117',
+        border:      `1px solid ${hovered ? 'rgba(0,212,255,0.35)' : '#1E2330'}`,
+        boxShadow:   hovered
+          ? '0 0 0 1px rgba(0,212,255,0.1), 0 4px 24px rgba(0,212,255,0.06)'
+          : 'none',
+        transform:   hovered ? 'translateY(-1px)' : 'none',
+        transition:  'border-color 0.18s, box-shadow 0.18s, transform 0.18s',
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Top shimmer accent line */}
+      <div
+        className="absolute top-0 left-0 right-0 h-px rounded-t-[10px]"
+        style={{
+          background: hovered
+            ? 'linear-gradient(90deg, transparent, rgba(0,212,255,0.5), transparent)'
+            : 'transparent',
+          transition: 'background 0.18s',
+        }}
+      />
 
-        <div className="flex flex-wrap gap-1.5">
-          {job.function_category && (
-            <Badge variant="secondary">{job.function_category}</Badge>
-          )}
-          {job.vertical && <Badge variant="secondary">{job.vertical}</Badge>}
-          {job.seniority && job.seniority !== 'Unspecified' && (
-            <Badge variant="outline">{job.seniority}</Badge>
-          )}
-          {job.remote_status && job.remote_status !== 'Unspecified' && (
-            <Badge variant="outline">{job.remote_status}</Badge>
-          )}
-          {salary && <Badge variant="outline">{salary}</Badge>}
-          {typeof job.score_total === 'number' && (
-            <Badge variant="outline" className="tabular-nums">
-              rule: {job.score_total}
-            </Badge>
-          )}
-        </div>
+      {/* Row 1 — title + match badge */}
+      <div className="flex items-start gap-3">
+        <h3
+          className="flex-1 font-heading font-bold text-sm leading-snug line-clamp-2"
+          style={{ color: '#E8ECF0', letterSpacing: '-0.02em' }}
+        >
+          {job.title}
+        </h3>
+        <MatchBadge score={score?.match_score ?? null} />
+      </div>
 
-        {score && (score.strengths.length > 0 || score.gaps.length > 0) && (
-          <div className="space-y-1 text-xs">
-            {score.strengths[0] && (
-              <p>
-                <span className="font-semibold text-green-700 dark:text-green-400">
-                  ✓
-                </span>{' '}
-                {score.strengths[0]}
-              </p>
-            )}
-            {score.gaps[0] && (
-              <p>
-                <span className="font-semibold text-red-700 dark:text-red-400">
-                  ✗
-                </span>{' '}
-                {score.gaps[0]}
-              </p>
-            )}
-            {score.verdict_one_liner && (
-              <p className="text-muted-foreground italic">
-                {score.verdict_one_liner}
-              </p>
-            )}
-          </div>
+      {/* Row 2 — company · location */}
+      <div className="flex items-center gap-1.5 text-xs">
+        <span className="font-body font-medium" style={{ color: '#A0AABB' }}>
+          {job.company ?? 'Unknown'}
+        </span>
+        {job.location && (
+          <>
+            <span style={{ color: '#252D40' }}>·</span>
+            <span className="font-body" style={{ color: '#6B7A99' }}>
+              {job.location}
+            </span>
+          </>
         )}
+      </div>
 
-        <div className="mt-auto flex items-center justify-between pt-2">
-          <span className="text-xs text-muted-foreground">
-            {formatRelativeDate(job.first_seen_at)} · {job.source}
-          </span>
-          <div className="flex gap-1">
-            <SaveToTrackerButton
-              job_id={job.id}
-              job_title_snapshot={job.title}
-              company_snapshot={job.company}
-              apply_url_snapshot={applyHref ?? null}
-              source_snapshot={job.source}
-            />
-            {applyHref && (
-              <Button asChild size="sm">
-                <a href={applyHref} target="_blank" rel="noopener noreferrer">
-                  Apply <ExternalLink className="ml-1 h-3 w-3" />
-                </a>
-              </Button>
-            )}
-          </div>
+      {/* Row 3 — tags + rule badge */}
+      {(tags.length > 0 || job.score_total != null) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {tags.map((t) => (
+            <TagPill key={t} label={t} />
+          ))}
+          {job.score_total != null && <RuleBadge score={job.score_total} />}
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      {/* Row 4 — salary (shown when present) */}
+      {salary && (
+        <p className="font-mono text-[10px]" style={{ color: '#3A4460' }}>
+          {salary}
+        </p>
+      )}
+
+      {/* AI verdict snippet */}
+      {score?.verdict_one_liner && (
+        <p
+          className="font-body text-[11px] leading-relaxed italic line-clamp-2"
+          style={{ color: '#6B7A99' }}
+        >
+          {score.verdict_one_liner}
+        </p>
+      )}
+
+      {/* Row 5 — bottom bar */}
+      <div className="flex items-center justify-between gap-2 mt-auto pt-1">
+        <span className="font-mono text-[10px]" style={{ color: '#3A4460' }}>
+          {formatRelativeDate(job.first_seen_at)} · via {job.source}
+        </span>
+        <div className="flex items-center gap-1">
+          <SaveToTrackerButton
+            job_id={job.id}
+            job_title_snapshot={job.title}
+            company_snapshot={job.company}
+            apply_url_snapshot={applyHref ?? null}
+            source_snapshot={job.source}
+          />
+          {applyHref && (
+            <button
+              onClick={handleApply}
+              disabled={applying}
+              className="font-mono text-[10px] font-semibold rounded-[5px] px-3 py-[5px] transition-transform duration-150 hover:scale-[1.03]"
+              style={
+                applied
+                  ? {
+                      background: 'rgba(0,212,255,0.15)',
+                      border: '1px solid rgba(0,212,255,0.4)',
+                      color: '#00D4FF',
+                    }
+                  : {
+                      background: '#00D4FF',
+                      border: '1px solid #00D4FF',
+                      color: '#000',
+                    }
+              }
+            >
+              {applied ? 'applied ✓' : 'apply →'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

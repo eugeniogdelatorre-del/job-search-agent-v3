@@ -1,16 +1,11 @@
-'use client'
+﻿'use client'
 
-// FilterBar — pushes changes into the URL search params so the server
-// component re-reads them and re-queries. No client-side state store.
-//
-// Only the filters listed in plan §6 Phase 5. Posted-within defaults to
-// page-level defaults (e.g. /week always scopes to 7d via its own cutoff),
-// but the user can tighten on any page using this control.
+// FilterBar — dark redesign. Pushes changes into URL search params.
+// All inputs share dark fill + cyan focus. Uses inline styles for design-specific
+// colors; Tailwind for layout/spacing.
 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useTransition } from 'react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import {
   FUNCTION_CATEGORIES,
   REMOTE_STATUSES,
@@ -19,14 +14,41 @@ import {
 } from '@/types/db'
 import { FILTER_KEYS } from '@/lib/filters'
 
-type Props = {
-  /** Hide the postedWithin control when the page is already scoped (e.g. /week). */
-  hidePostedWithin?: boolean
+const INPUT_BASE: React.CSSProperties = {
+  background:   'rgba(255,255,255,0.03)',
+  border:       '1px solid #1E2330',
+  borderRadius: '6px',
+  color:        '#E8ECF0',
+  fontFamily:   'var(--font-mono)',
+  fontSize:     '11px',
+  padding:      '6px 10px',
+  height:       '34px',
+  outline:      'none',
+  transition:   'border-color 0.15s, box-shadow 0.15s',
 }
 
+const SELECT_BASE: React.CSSProperties = {
+  ...INPUT_BASE,
+  paddingRight:       '28px',
+  backgroundRepeat:   'no-repeat',
+  backgroundPosition: 'right 8px center',
+  cursor:             'pointer',
+} as React.CSSProperties
+
+function onFocus(e: React.FocusEvent<HTMLElement>) {
+  e.target.style.borderColor = '#00D4FF'
+  e.target.style.boxShadow   = '0 0 0 2px rgba(0,212,255,0.15)'
+}
+function onBlur(e: React.FocusEvent<HTMLElement>) {
+  e.target.style.borderColor = '#1E2330'
+  e.target.style.boxShadow   = 'none'
+}
+
+type Props = { hidePostedWithin?: boolean }
+
 export function FilterBar({ hidePostedWithin }: Props) {
-  const router = useRouter()
-  const pathname = usePathname()
+  const router       = useRouter()
+  const pathname     = usePathname()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
 
@@ -40,115 +62,71 @@ export function FilterBar({ hidePostedWithin }: Props) {
   }
 
   function reset() {
-    startTransition(() => {
-      router.replace(pathname, { scroll: false })
-    })
+    startTransition(() => router.replace(pathname, { scroll: false }))
   }
 
-  const val = (k: string) => searchParams.get(k) ?? ''
+  const val        = (k: string) => searchParams.get(k) ?? ''
   const hasFilters = FILTER_KEYS.some((k) => searchParams.get(k))
 
-  const selectCls =
-    'h-9 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring'
-
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3">
-      <Input
-        type="search"
-        placeholder="Search title / company"
-        className="h-9 w-full max-w-xs"
-        defaultValue={val('q')}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') update('q', (e.target as HTMLInputElement).value)
-        }}
-      />
+    <div
+      className="flex flex-wrap items-center gap-2 rounded-[10px] p-3.5"
+      style={{ background: '#0F1117', border: '1px solid #1E2330' }}
+    >
+      {/* Search input */}
+      <div className="relative flex items-center" style={{ flexGrow: 1, minWidth: '180px' }}>
+        <svg
+          className="absolute left-2.5 pointer-events-none"
+          width="12" height="12" viewBox="0 0 24 24"
+          fill="none" stroke="#6B7A99" strokeWidth="2"
+          strokeLinecap="round" strokeLinejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          type="search"
+          placeholder="Search title / company"
+          className="w-full pl-8 focus:outline-none focus:ring-0"
+          style={INPUT_BASE}
+          defaultValue={val('q')}
+          onFocus={onFocus}
+          onBlur={(e) => { onBlur(e); update('q', e.target.value) }}
+          onKeyDown={(e) => { if (e.key === 'Enter') update('q', (e.target as HTMLInputElement).value) }}
+        />
+      </div>
 
-      <select
-        className={selectCls}
-        value={val('function')}
-        onChange={(e) => update('function', e.target.value)}
-      >
+      {/* Divider */}
+      <div style={{ width: 1, height: 24, background: '#1E2330', flexShrink: 0 }} />
+
+      {/* Selects */}
+      <select style={SELECT_BASE} value={val('function')}  onChange={(e) => update('function',  e.target.value)} onFocus={onFocus} onBlur={onBlur}>
         <option value="">Any function</option>
-        {FUNCTION_CATEGORIES.map((v) => (
-          <option key={v} value={v}>
-            {v}
-          </option>
-        ))}
+        {FUNCTION_CATEGORIES.map((v) => <option key={v} value={v}>{v}</option>)}
       </select>
-
-      <select
-        className={selectCls}
-        value={val('vertical')}
-        onChange={(e) => update('vertical', e.target.value)}
-      >
+      <select style={SELECT_BASE} value={val('vertical')}  onChange={(e) => update('vertical',  e.target.value)} onFocus={onFocus} onBlur={onBlur}>
         <option value="">Any vertical</option>
-        {VERTICALS.map((v) => (
-          <option key={v} value={v}>
-            {v}
-          </option>
-        ))}
+        {VERTICALS.map((v) => <option key={v} value={v}>{v}</option>)}
       </select>
-
-      <select
-        className={selectCls}
-        value={val('seniority')}
-        onChange={(e) => update('seniority', e.target.value)}
-      >
+      <select style={SELECT_BASE} value={val('seniority')} onChange={(e) => update('seniority', e.target.value)} onFocus={onFocus} onBlur={onBlur}>
         <option value="">Any seniority</option>
-        {SENIORITIES.map((v) => (
-          <option key={v} value={v}>
-            {v}
-          </option>
-        ))}
+        {SENIORITIES.map((v) => <option key={v} value={v}>{v}</option>)}
       </select>
-
-      <select
-        className={selectCls}
-        value={val('remote')}
-        onChange={(e) => update('remote', e.target.value)}
-      >
+      <select style={SELECT_BASE} value={val('remote')}    onChange={(e) => update('remote',    e.target.value)} onFocus={onFocus} onBlur={onBlur}>
         <option value="">Any location</option>
-        {REMOTE_STATUSES.map((v) => (
-          <option key={v} value={v}>
-            {v}
-          </option>
-        ))}
+        {REMOTE_STATUSES.map((v) => <option key={v} value={v}>{v}</option>)}
       </select>
 
-      <Input
-        type="number"
-        placeholder="Min salary $"
-        className="h-9 w-32"
-        defaultValue={val('salaryFloor')}
-        onBlur={(e) => update('salaryFloor', e.target.value)}
-      />
+      {/* Divider */}
+      <div style={{ width: 1, height: 24, background: '#1E2330', flexShrink: 0 }} />
 
-      <Input
-        type="number"
-        placeholder="Rule score ≥"
-        className="h-9 w-32"
-        min={0}
-        max={100}
-        defaultValue={val('scoreMin')}
-        onBlur={(e) => update('scoreMin', e.target.value)}
-      />
-
-      <Input
-        type="number"
-        placeholder="Match % ≥"
-        className="h-9 w-28"
-        min={0}
-        max={100}
-        defaultValue={val('matchMin')}
-        onBlur={(e) => update('matchMin', e.target.value)}
-      />
+      {/* Numeric inputs */}
+      <input type="number" placeholder="min $"    style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('salaryFloor')} onFocus={onFocus} onBlur={(e) => { onBlur(e); update('salaryFloor', e.target.value) }} />
+      <input type="number" placeholder="rule ≥"   style={{ ...INPUT_BASE, width: 64 }} min={0} defaultValue={val('scoreMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('scoreMin',    e.target.value) }} />
+      <input type="number" placeholder="match ≥"  style={{ ...INPUT_BASE, width: 64 }} min={0} defaultValue={val('matchMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('matchMin',    e.target.value) }} />
 
       {!hidePostedWithin && (
-        <select
-          className={selectCls}
-          value={val('postedWithin')}
-          onChange={(e) => update('postedWithin', e.target.value)}
-        >
+        <select style={SELECT_BASE} value={val('postedWithin')} onChange={(e) => update('postedWithin', e.target.value)} onFocus={onFocus} onBlur={onBlur}>
           <option value="">Any date</option>
           <option value="1d">Last 24h</option>
           <option value="7d">Last 7 days</option>
@@ -157,14 +135,16 @@ export function FilterBar({ hidePostedWithin }: Props) {
       )}
 
       {hasFilters && (
-        <Button
-          variant="ghost"
-          size="sm"
+        <button
           onClick={reset}
           disabled={isPending}
+          className="font-mono text-[10px] font-medium rounded px-2.5 py-1 transition-colors"
+          style={{ background: 'transparent', border: '1px solid #252D40', color: '#6B7A99' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#E8ECF0'; e.currentTarget.style.borderColor = '#6B7A99' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#6B7A99'; e.currentTarget.style.borderColor = '#252D40' }}
         >
-          Clear
-        </Button>
+          clear ✕
+        </button>
       )}
     </div>
   )

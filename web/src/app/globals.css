@@ -2,10 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Classic shadcn/ui tokens for Tailwind v3 (HSL, not oklch). The v4
- * preset the CLI ships with didn't round-trip cleanly through a v3
- * scaffold — so we pin the token set here by hand. */
+/* ─── Design tokens ───────────────────────────────────────────────────────── */
+:root {
+  --bg-base:           #0A0C10;
+  --bg-card:           #0F1117;
+  --bg-elevated:       #141820;
+  --border-color:      #1E2330;
+  --border-mid:        #252D40;
+  --accent-cyan:       #00D4FF;
+  --accent-cyan-dim:   rgba(0, 212, 255, 0.12);
+  --accent-cyan-glow:  rgba(0, 212, 255, 0.25);
+  --accent-amber:      #F5A623;
+  --accent-amber-dim:  rgba(245, 166, 35, 0.12);
+  --text-primary:      #E8ECF0;
+  --text-muted:        #6B7A99;
+  --text-mid:          #A0AABB;
+  --text-dim:          #3A4460;
+}
 
+/* ─── shadcn/ui HSL tokens ────────────────────────────────────────────────── */
+/* .dark is applied unconditionally in layout.tsx — this block is operative. */
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -30,34 +46,72 @@
     --radius: 0.5rem;
   }
 
+  /* Dark values mirror design tokens (HSL approximations):
+     #0A0C10≈220 23% 5%  #0F1117≈228 18% 7%  #E8ECF0≈210 22% 92%
+     #6B7A99≈218 18% 51% #1E2330≈222 26% 14% #252D40≈220 26% 19% */
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --background: 220 23% 5%;
+    --foreground: 210 22% 92%;
+    --card: 228 18% 7%;
+    --card-foreground: 210 22% 92%;
+    --popover: 228 18% 7%;
+    --popover-foreground: 210 22% 92%;
+    --primary: 191 100% 50%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 225 19% 10%;
+    --secondary-foreground: 210 22% 92%;
+    --muted: 225 19% 10%;
+    --muted-foreground: 218 18% 51%;
+    --accent: 225 19% 10%;
+    --accent-foreground: 210 22% 92%;
+    --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
+    --border: 222 26% 14%;
+    --input: 220 26% 19%;
+    --ring: 191 100% 50%;
+    --radius: 0.5rem;
   }
 }
 
+/* ─── Base styles ─────────────────────────────────────────────────────────── */
 @layer base {
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      linear-gradient(rgba(30, 35, 48, 0.4) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30, 35, 48, 0.4) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 128px 128px;
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: 9999;
   }
 }
+
+/* ─── Skeleton shimmer ────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #1E2330 25%, #252D40 50%, #1E2330 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite;
+  border-radius: 4px;
+}
+
+/* ─── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 6px; height: 6px; }
+::-webkit-scrollbar-track  { background: #0A0C10; }
+::-webkit-scrollbar-thumb  { background: #252D40; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #6B7A99; }
