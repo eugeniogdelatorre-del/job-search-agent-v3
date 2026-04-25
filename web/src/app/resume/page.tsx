@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ResumeUploader } from '@/components/ResumeUploader'
-import { ActivateResumeButton } from '@/components/ActivateResumeButton'
+import { ActivateResumeButton, RescoreButton } from '@/components/ActivateResumeButton'
 import { formatRelativeDate } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
@@ -38,7 +38,7 @@ export default async function ResumePage() {
           CV
         </h1>
         <p className="mt-1 font-mono text-[11px]" style={{ color: '#6B7A99' }}>
-          Upload a PDF résumé — the nightly cv_score workflow scores jobs against the active version
+          Upload a PDF — use &quot;Activate &amp; re-score&quot; to switch CVs and kick off scoring immediately
         </p>
       </div>
 
@@ -87,14 +87,17 @@ export default async function ResumePage() {
                   {r.char_count?.toLocaleString() ?? '—'} chars · {formatRelativeDate(r.created_at)}
                 </span>
 
-                {/* Status badge / activate button */}
+                {/* Status badge / activate / rescore buttons */}
                 {r.is_active ? (
-                  <span
-                    className="font-mono text-[10px] font-medium rounded px-2.5 py-1"
-                    style={{ background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.4)', color: '#00D4FF' }}
-                  >
-                    active
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="font-mono text-[10px] font-medium rounded px-2.5 py-1"
+                      style={{ background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.4)', color: '#00D4FF' }}
+                    >
+                      active
+                    </span>
+                    <RescoreButton />
+                  </div>
                 ) : (
                   <ActivateResumeButton resumeId={r.id} />
                 )}
