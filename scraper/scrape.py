@@ -16,10 +16,11 @@ Pipeline:
     8. Run retention (7-day inactive, 60-day delete)
 
 Parser priority (first match wins): greenhouse > lever > ashby > workday >
-cryptojobslist > web3career > weworkremotely > generic (BS4 fallback).
+bamboohr > teamtailor > cryptojobslist > web3career > weworkremotely > generic (BS4 fallback).
 
 Usage:
-    python scraper/scrape.py --group 1
+    python scraper/scrape.py                        # all sources (daily run)
+    python scraper/scrape.py --group 1              # group 1 only (debug)
     python scraper/scrape.py --group 2
     python scraper/scrape.py --group 1 --dry        # no DB writes
     python scraper/scrape.py --group 1 --limit 3    # debug: only first 3 sources
@@ -42,10 +43,12 @@ from scraper import junk_filters, retention, sources, supabase_client
 from scraper.dedup import dedup_within_run, make_dedup_key
 from scraper.parsers import (
     ashby,
+    bamboohr,
     cryptojobslist,
     generic,
     greenhouse,
     lever,
+    teamtailor,
     web3career,
     weworkremotely,
     workday,
@@ -59,6 +62,8 @@ PARSERS = [
     lever,
     ashby,
     workday,
+    bamboohr,
+    teamtailor,
     cryptojobslist,
     web3career,
     weworkremotely,
@@ -187,13 +192,14 @@ def _job_to_row(job: dict, score: int, breakdown: dict) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Job scrape orchestrator — v3")
-    ap.add_argument("--group", type=int, required=True, choices=[1, 2], help="v3 super-group")
+    ap.add_argument("--group", type=int, required=False, default=None, choices=[1, 2],
+                    help="v3 source group (1 or 2); omit to run all sources")
     ap.add_argument("--dry", action="store_true", help="don't write to Supabase")
     ap.add_argument("--limit", type=int, default=None, help="debug: only first N sources")
     ap.add_argument("--no-retention", action="store_true", help="skip the retention pass")
     args = ap.parse_args()
 
-    print(f"scrape v3 — group={args.group}  dry={args.dry}  started={datetime.now(timezone.utc).isoformat()}")
+    print(f"scrape v3 — group={args.group if args.group is not None else 'all'}  dry={args.dry}  started={datetime.now(timezone.utc).isoformat()}")
 
     client = None if args.dry else supabase_client.get_client()
     if args.dry:
@@ -216,17 +222,22 @@ def main() -> int:
     if suspended:
         print(f"  suspended sources ({len(suspended)}): {sorted(suspended)}")
 
-    group_sources = sources.get_sources_for_group(args.group)
+    all_sources = (
+        sources.get_all_sources()
+        if args.group is None
+        else sources.get_sources_for_group(args.group)
+    )
     if args.limit:
-        group_sources = group_sources[: args.limit]
-    print(f"  {len(group_sources)} sources loaded for group {args.group}")
+        all_sources = all_sources[: args.limit]
+    group_label = f"group {args.group}" if args.group is not None else "all groups"
+    print(f"  {len(all_sources)} sources loaded ({group_label})")
 
     config = resolve_config(supabase_client.fetch_scoring_config(client) if client else {})
     print(f"  scoring thresholds: {config['thresholds']}")
 
     session = make_session()
     all_jobs: list[dict] = []
-    for src in group_sources:
+    for src in all_sources:
         company = src.get("name") or "unknown"
         if company in suspended:
             print(f"  [suspended] {company}: skipping — re-enable in /settings")
