@@ -9,6 +9,7 @@ import { FilterBar } from '@/components/FilterBar'
 import { JobList, JobListSkeleton } from '@/components/JobList'
 import { StatsBar } from '@/components/StatsBar'
 import { ExportMenu } from '@/components/ExportMenu'
+import { RunPipelineButton } from '@/components/RunPipelineButton'
 import { parseFilters, filtersToSearchParams } from '@/lib/filters'
 import { queryJobs } from '@/lib/jobs-query'
 
@@ -58,10 +59,13 @@ export default async function TodayPage({
             {weekday}, {date} · {indexed} positions indexed
           </p>
         </div>
-        <ExportMenu
-          scopeSinceDays={1}
-          currentSearch={filtersToSearchParams(filters).toString()}
-        />
+        <div className="flex items-center gap-2">
+          <RunPipelineButton />
+          <ExportMenu
+            scopeSinceDays={1}
+            currentSearch={filtersToSearchParams(filters).toString()}
+          />
+        </div>
       </div>
 
       {/* Stats bar */}

@@ -86,6 +86,77 @@ def log_source_health(
         print(f"  [supabase] sources_health insert failed for {source}: {e}", file=sys.stderr)
 
 
+def fetch_suspended_sources(client) -> set[str]:
+    """Return a set of source names that are currently suspended.
+
+    Returns an empty set on any error so a Supabase outage never
+    blocks the scrape run.
+    """
+    if client is None:
+        return set()
+    try:
+        resp = (
+            client.table("source_states")
+            .select("source_name")
+            .eq("suspended", True)
+            .execute()
+        )
+        rows = getattr(resp, "data", None) or []
+        return {r["source_name"] for r in rows}
+    except Exception as e:
+        print(f"  [supabase] fetch_suspended_sources failed: {e}", file=sys.stderr)
+        return set()
+
+
+def update_source_state(client, source_name: str, success: bool) -> None:
+    """Increment or reset consecutive_failures for a source.
+
+    On the 5th consecutive failure the source is marked suspended=true.
+    On any success the counter resets and suspended is cleared.
+    Uses upsert so the row is created on first encounter.
+    """
+    if client is None:
+        return
+    now = _now_iso()
+    try:
+        # Fetch current state.
+        resp = (
+            client.table("source_states")
+            .select("consecutive_failures, suspended")
+            .eq("source_name", source_name)
+            .maybe_single()
+            .execute()
+        )
+        current = getattr(resp, "data", None) or {}
+        failures = current.get("consecutive_failures", 0)
+
+        if success:
+            row = {
+                "source_name": source_name,
+                "consecutive_failures": 0,
+                "suspended": False,
+                "suspended_at": None,
+                "last_success_at": now,
+                "updated_at": now,
+            }
+        else:
+            new_failures = failures + 1
+            newly_suspended = new_failures >= 5
+            row = {
+                "source_name": source_name,
+                "consecutive_failures": new_failures,
+                "suspended": newly_suspended,
+                "suspended_at": now if newly_suspended and not current.get("suspended") else current.get("suspended_at"),
+                "updated_at": now,
+            }
+            if newly_suspended and not current.get("suspended"):
+                print(f"  [supabase] source '{source_name}' suspended after {new_failures} consecutive failures")
+
+        client.table("source_states").upsert(row, on_conflict="source_name").execute()
+    except Exception as e:
+        print(f"  [supabase] update_source_state failed for {source_name}: {e}", file=sys.stderr)
+
+
 def fetch_scoring_config(client) -> dict:
     """Read the single-row scoring_config.config jsonb. Returns {} if unavailable or empty."""
     if client is None:

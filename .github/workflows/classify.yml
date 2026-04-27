@@ -1,7 +1,7 @@
 name: classify
 
-# Daily at 06:00 UTC (= 03:00 ART). Classifies new jobs via Claude Haiku
-# 4.5 Batch API — 50% off base rates. Runs AFTER the final 00:00 UTC
+# Daily at 05:00 UTC (= 02:00 ART). Classifies new jobs via Claude Haiku
+# 4.5 Batch API — 50% off base rates. Runs AFTER the final 03:00 UTC
 # scrape of the night, so fresh jobs get classified in the morning run.
 # cv_score.yml fires an hour later at 07:00 UTC, picking up whatever
 # this run classified.
@@ -14,7 +14,7 @@ name: classify
 
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "0 5 * * *"
   workflow_dispatch:
     inputs:
       limit:

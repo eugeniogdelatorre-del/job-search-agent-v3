@@ -115,6 +115,13 @@ def parse(session: requests.Session, source: dict) -> list[dict]:
     if resp.status_code != 200:
         raise RuntimeError(f"generic {resp.status_code} for {url}")
 
+    # Guard: if the careers page silently redirected to a homepage, bail out.
+    # A homepage redirect means the final URL path is empty or bare "/".
+    if resp.url != url:
+        from urllib.parse import urlparse as _urlparse
+        if not _urlparse(resp.url).path.rstrip("/"):
+            return []
+
     soup = BeautifulSoup(resp.text, "lxml")
     company = source.get("name") or urlparse(url).netloc
     category = source.get("category")

@@ -2,9 +2,11 @@
 
 Uses the public Boards API:
     https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true
+    https://boards-api.eu.greenhouse.io/v1/boards/{slug}/jobs?content=true  (EU)
 
-Slug extraction handles these v2 URL shapes:
+Slug extraction handles these URL shapes:
     https://boards.greenhouse.io/{slug}
+    https://boards.eu.greenhouse.io/{slug}
     https://boards.greenhouse.io/{slug}/jobs/...
     https://{slug}.greenhouse.io/...
     https://jobs.greenhouse.io/{slug}
@@ -28,30 +30,38 @@ _GREENHOUSE_URL = re.compile(
     r"boards(?:-api)?\.greenhouse\.io/(?P<slug1>[a-z0-9\-]+)"
     r"|jobs\.greenhouse\.io/(?P<slug2>[a-z0-9\-]+)"
     r"|(?P<slug3>[a-z0-9\-]+)\.greenhouse\.io"
+    r"|boards(?:-api)?\.eu\.greenhouse\.io/(?P<slug4>[a-z0-9\-]+)"
     r")",
     re.IGNORECASE,
 )
 
+_US_API_BASE = "https://boards-api.greenhouse.io"
+_EU_API_BASE = "https://boards-api.eu.greenhouse.io"
 
-def _extract_slug(url: str) -> str | None:
+
+def _extract_slug(url: str) -> tuple[str | None, bool]:
+    """Return (slug, is_eu). is_eu=True when the URL uses the EU-hosted board."""
     m = _GREENHOUSE_URL.search(url or "")
     if not m:
-        return None
-    return m.group("slug1") or m.group("slug2") or m.group("slug3")
+        return None, False
+    slug = m.group("slug1") or m.group("slug2") or m.group("slug3") or m.group("slug4")
+    is_eu = m.group("slug4") is not None
+    return slug, is_eu
 
 
 def can_parse(source: dict) -> bool:
-    return _extract_slug(source.get("url", "")) is not None
+    slug, _ = _extract_slug(source.get("url", ""))
+    return slug is not None
 
 
 def parse(session: requests.Session, source: dict) -> list[dict]:
-    slug = _extract_slug(source["url"])
+    slug, is_eu = _extract_slug(source["url"])
     if not slug:
         return []
-    api_url = f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true"
+    api_base = _EU_API_BASE if is_eu else _US_API_BASE
+    api_url = f"{api_base}/v1/boards/{slug}/jobs?content=true"
     resp = session.get(api_url, timeout=REQUEST_TIMEOUT_SECONDS)
     if resp.status_code != 200:
-        # Surface the status to the caller via exception so sources_health records the failure.
         raise RuntimeError(f"greenhouse API {resp.status_code} for slug={slug}")
 
     payload = resp.json()
@@ -66,7 +76,6 @@ def parse(session: requests.Session, source: dict) -> list[dict]:
         location = (job.get("location") or {}).get("name")
         apply_url = job.get("absolute_url") or f"https://boards.greenhouse.io/{slug}/jobs/{job.get('id')}"
         content_html = job.get("content") or ""
-        # Greenhouse returns HTML-encoded content; strip tags quick-and-dirty.
         description = _strip_html(content_html)[:5000] if content_html else None
 
         out.append({
@@ -86,10 +95,7 @@ def parse(session: requests.Session, source: dict) -> list[dict]:
 
 
 def _strip_html(html: str) -> str:
-    # Avoid pulling bs4 for hot-path strip; scrape.py uses bs4 for HTML parsers
-    # but here the Greenhouse API gives us already-cleanish HTML. Cheap regex strip.
     no_tags = re.sub(r"<[^>]+>", " ", html)
-    # Decode a handful of common entities without the html module overhead.
     no_tags = (
         no_tags.replace("&amp;", "&")
         .replace("&nbsp;", " ")
