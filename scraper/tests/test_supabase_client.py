@@ -53,10 +53,10 @@ def test_fetch_suspended_db_error():
 # ---------------------------------------------------------------------------
 
 def test_update_none_client():
-    """client=None must not make any table calls."""
-    mock_client = MagicMock()
-    update_source_state(None, "some_source", True)
-    mock_client.table.assert_not_called()
+    """When client is None, function returns immediately without DB calls."""
+    # Passing None as the client; if the None-guard is removed,
+    # this raises AttributeError on None.table() and the test fails.
+    update_source_state(None, "some_source", True)  # must not raise
 
 
 def test_update_success_resets():
