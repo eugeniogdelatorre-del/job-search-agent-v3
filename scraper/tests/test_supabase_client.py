@@ -54,10 +54,9 @@ def test_fetch_suspended_db_error():
 
 def test_update_none_client():
     """client=None must not make any table calls."""
-    # If any table call were made this would raise AttributeError, but we
-    # use a real None so the guard branch is exercised purely.
-    update_source_state(None, "some_source", success=True)
-    # No assertion needed — reaching here without error proves the guard works.
+    mock_client = MagicMock()
+    update_source_state(None, "some_source", True)
+    mock_client.table.assert_not_called()
 
 
 def test_update_success_resets():
@@ -103,3 +102,13 @@ def test_update_5th_failure_suspends():
     assert row["consecutive_failures"] == 5
     assert row["suspended"] is True
     assert row["source_name"] == "src_z"
+
+
+def test_update_new_source_first_failure():
+    """When no prior row exists, first failure creates row with consecutive_failures=1."""
+    client = _make_select_client(None)  # data=None simulates no existing row
+    update_source_state(client, "brand_new_source", success=False)
+    row = client.table.return_value.upsert.call_args[0][0]
+    assert row["consecutive_failures"] == 1
+    assert row["suspended"] is False
+    assert row["source_name"] == "brand_new_source"
