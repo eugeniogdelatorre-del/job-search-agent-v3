@@ -1,10 +1,15 @@
 {
   "metadata": {
-    "version": "2.1.1",
-    "last_updated": "2026-04-21",
-    "total_sources": 92,
+    "version": "2.2.0",
+    "last_updated": "2026-04-25",
+    "total_sources": 131,
     "groups": 6,
-    "schedule_note": "Each group runs once daily at its designated UTC hour to stay within free tier limits"
+    "schedule_note": "Each group runs once daily at its designated UTC hour to stay within free tier limits",
+    "cjl_boost_companies": [
+      "Rain", "Prime Albania", "Rho Protocol", "YieldSchool", "Utila",
+      "Headstart", "Multyr", "Genius PR", "Moonward Capital",
+      "KernelDAO", "Superis Labs", "Paradex"
+    ]
   },
   "groups": {
     "group_1": {
@@ -28,7 +33,12 @@
         {"name": "Aptos", "url": "https://aptoslabs.com/careers", "category": "L1"},
         {"name": "Near Protocol", "url": "https://careers.near.org/", "category": "L1"},
         {"name": "Fuel Network", "url": "https://fuel.network/careers", "category": "L2"},
-        {"name": "OKX", "url": "https://www.okx.com/es-la/join-us/openings", "category": "CEX"}
+        {"name": "OKX", "url": "https://www.okx.com/es-la/join-us/openings", "category": "CEX"},
+        {"name": "Blockchain.com", "url": "https://boards.greenhouse.io/blockchain", "category": "CEX"},
+        {"name": "Gemini", "url": "https://boards.greenhouse.io/gemini", "category": "CEX"},
+        {"name": "BitGo", "url": "https://job-boards.greenhouse.io/bitgo", "category": "Custody"},
+        {"name": "Bitpanda", "url": "https://job-boards.eu.greenhouse.io/bitpanda", "category": "CEX"},
+        {"name": "Paxos", "url": "https://boards.greenhouse.io/paxos", "category": "Stablecoin"}
       ]
     },
     "group_2": {
@@ -51,7 +61,15 @@
         {"name": "Exodus", "url": "https://www.exodus.com/careers", "category": "Wallet"},
         {"name": "Ondo Finance", "url": "https://ondo.finance/careers", "category": "RWA"},
         {"name": "Backed", "url": "https://backed.fi/careers", "category": "RWA"},
-        {"name": "Reental", "url": "https://reental.co/en/careers", "category": "RWA"}
+        {"name": "Reental", "url": "https://reental.co/en/careers", "category": "RWA"},
+        {"name": "Fireblocks", "url": "https://job-boards.greenhouse.io/fireblocks", "category": "Custody"},
+        {"name": "Gnosis", "url": "https://boards.greenhouse.io/gnosis", "category": "DeFi"},
+        {"name": "Uniswap Foundation", "url": "https://job-boards.greenhouse.io/uniswapfoundation", "category": "DeFi"},
+        {"name": "Securitize", "url": "https://job-boards.greenhouse.io/securitize", "category": "RWA"},
+        {"name": "Aragon", "url": "https://jobs.lever.co/aragon", "category": "DAO"},
+        {"name": "Ledn", "url": "https://jobs.lever.co/ledn", "category": "FinTech"},
+        {"name": "CoinTracker", "url": "https://jobs.lever.co/cointracker", "category": "FinTech"},
+        {"name": "MoonPay", "url": "https://jobs.lever.co/moonpay", "category": "FinTech"}
       ]
     },
     "group_3": {
@@ -73,14 +91,25 @@
         {"name": "Suno", "url": "https://suno.com/careers", "category": "AI"},
         {"name": "Cursor", "url": "https://www.cursor.com/careers", "category": "DevTools"},
         {"name": "Consensys", "url": "https://boards.greenhouse.io/consensys", "category": "DevTools"},
-        {"name": "Core Scientific", "url": "https://corescientific.com/careers/job-openings/", "category": "Mining"}
+        {"name": "Core Scientific", "url": "https://corescientific.com/careers/job-openings/", "category": "Mining"},
+        {"name": "Dapper Labs", "url": "https://boards.greenhouse.io/dapperlabs", "category": "NFT"},
+        {"name": "Yuga Labs", "url": "https://boards.greenhouse.io/yugalabs", "category": "NFT"},
+        {"name": "OpenZeppelin", "url": "https://boards.greenhouse.io/openzeppelin", "category": "Security"},
+        {"name": "Brave", "url": "https://boards.greenhouse.io/brave", "category": "Browser"},
+        {"name": "Elwood Technologies", "url": "https://boards.greenhouse.io/elwoodtechnologies", "category": "Infra"},
+        {"name": "OpenSea", "url": "https://jobs.lever.co/opensea", "category": "NFT"},
+        {"name": "Phantom", "url": "https://jobs.lever.co/phantom", "category": "Wallet"},
+        {"name": "Matter Labs (zkSync)", "url": "https://jobs.lever.co/matterlabs", "category": "L2"},
+        {"name": "Aztec", "url": "https://boards.eu.greenhouse.io/aztec", "category": "L2"},
+        {"name": "Alchemy", "url": "https://jobs.lever.co/alchemy", "category": "Infra"},
+        {"name": "CertiK", "url": "https://jobs.lever.co/certik", "category": "Security"}
       ]
     },
     "group_4": {
       "name": "Job Boards & Aggregators",
       "cron_utc": "0 18 * * *",
       "sources": [
-        {"name": "CryptoJobsList", "url": "https://cryptojobslist.com/", "category": "Board"},
+        {"name": "CryptoJobsList Feed", "url": "https://cryptojobslist.com/jobs.json", "category": "Board"},
         {"name": "Web3.career", "url": "https://web3.career/", "category": "Board"},
         {"name": "CryptocurrencyJobs", "url": "https://cryptocurrencyjobs.co/", "category": "Board"},
         {"name": "a16z Crypto Jobs", "url": "https://jobs.a16z.com/crypto", "category": "VC_Board"},
@@ -89,13 +118,12 @@
         {"name": "Remote OK", "url": "https://remoteok.com/remote-crypto-jobs", "category": "Remote_Board"},
         {"name": "GetOnBoard", "url": "https://www.getonbrd.com/jobs/blockchain", "category": "LATAM_Board"},
         {"name": "Torre", "url": "https://torre.ai/jobs?q=blockchain", "category": "LATAM_Board"},
-        {"name": "Paradex", "url": "https://cryptojobslist.com/companies/paradex", "category": "Aggregated"},
-        {"name": "Superis Labs", "url": "https://cryptojobslist.com/companies/superis-labs", "category": "Aggregated"},
-        {"name": "KernelDAO", "url": "https://cryptojobslist.com/companies/kerneldao", "category": "Aggregated"},
-        {"name": "Moonward Capital", "url": "https://cryptojobslist.com/companies/moonward-capital", "category": "Aggregated"},
         {"name": "RemoteLeaf", "url": "https://remoteleaf.com/", "category": "Remote_Board"},
         {"name": "Workable", "url": "https://jobs.workable.com/search?query=web3", "category": "ATS_Board"},
-        {"name": "TokenJobs", "url": "https://www.tokenjobs.io/", "category": "Board"}
+        {"name": "TokenJobs", "url": "https://www.tokenjobs.io/", "category": "Board"},
+        {"name": "MyWeb3Jobs", "url": "https://myweb3jobs.com/", "category": "Board"},
+        {"name": "Blockchain Association", "url": "https://jobs.theblockchainassociation.org/", "category": "Board"},
+        {"name": "Hirechain", "url": "https://share.hirechain.io/job-board/le5rgc1a70", "category": "VC_Board"}
       ]
     },
     "group_5": {
@@ -113,15 +141,31 @@
         {"name": "ARQ Finance", "url": "https://www.arqfinance.com/es-AR/careers", "category": "Finance"},
         {"name": "Based", "url": "https://based.one/careers", "category": "DeFi"},
         {"name": "Kash Bot", "url": "https://kash.bot/careers", "category": "Bot"},
-        {"name": "Genius PR", "url": "https://cryptojobslist.com/companies/genius-pr", "category": "Services"},
-        {"name": "Multyr", "url": "https://cryptojobslist.com/companies/multyr-ltd", "category": "Services"},
-        {"name": "Headstart", "url": "https://cryptojobslist.com/companies/headstart", "category": "Recruiting"},
-        {"name": "Utila", "url": "https://cryptojobslist.com/companies/utila", "category": "Infra"},
-        {"name": "YieldSchool", "url": "https://cryptojobslist.com/companies/yieldschool", "category": "DeFi"},
-        {"name": "Rho Protocol", "url": "https://cryptojobslist.com/companies/rho-labs", "category": "DeFi"},
         {"name": "Machine Phase Systems", "url": "https://machinephase.systems/", "category": "Dev"},
-        {"name": "Prime Albania", "url": "https://cryptojobslist.com/companies/prime-albania", "category": "Regional"},
-        {"name": "Rain", "url": "https://cryptojobslist.com/companies/rain", "category": "Regional"}
+        {"name": "Pantera Capital", "url": "https://jobs.lever.co/pantera-capital", "category": "VC"},
+        {"name": "Akuna Capital", "url": "https://boards.greenhouse.io/akunacapital", "category": "Trading"},
+        {"name": "BCB Group", "url": "https://job-boards.eu.greenhouse.io/bcbgroup", "category": "Banking"},
+        {"name": "Bitcoin Depot", "url": "https://job-boards.greenhouse.io/bitcoindepot", "category": "Bitcoin"},
+        {"name": "Ledger", "url": "https://jobs.lever.co/ledger", "category": "Hardware"},
+        {"name": "Veda", "url": "https://jobs.lever.co/vedatechlabs", "category": "DeFi"},
+        {"name": "Terra", "url": "https://jobs.lever.co/terrahq", "category": "L1"},
+        {"name": "Token Metrics", "url": "https://jobs.lever.co/tokenmetrics", "category": "Analytics"},
+        {"name": "Unlimit", "url": "https://jobs.lever.co/unlimit", "category": "Payments"},
+        {"name": "The Browser Company", "url": "https://jobs.lever.co/thebrowser-company", "category": "Browser"},
+        {"name": "xAI", "url": "https://job-boards.greenhouse.io/xai", "category": "AI"},
+        {"name": "Onehouse", "url": "https://lever.co/Onehouse", "category": "Data"},
+        {"name": "Pioneer Services", "url": "https://jobs.lever.co/pioneer-services", "category": "Finance"},
+        {"name": "KPA", "url": "https://jobs.lever.co/kpaonline", "category": "HR"},
+        {"name": "Groma", "url": "https://job-boards.greenhouse.io/groma", "category": "PropTech"},
+        {"name": "Life360", "url": "https://job-boards.greenhouse.io/life360", "category": "Consumer"},
+        {"name": "Ridgeline", "url": "https://boards.greenhouse.io/ridgeline", "category": "FinTech"},
+        {"name": "Cloudflare", "url": "https://job-boards.greenhouse.io/cloudflare", "category": "Infra"},
+        {"name": "BTSE", "url": "https://jobs.lever.co/BTSE", "category": "CEX"},
+        {"name": "Pantera Portfolio", "url": "https://jobs.panteracapital.com/", "category": "VC_Board"},
+        {"name": "Paradigm Portfolio", "url": "https://jobs.paradigm.xyz/", "ashby_slug": "paradigm", "category": "VC_Board"},
+        {"name": "Electric Capital", "url": "https://jobs.electriccapital.com/", "category": "VC_Board"},
+        {"name": "Dragonfly Capital", "url": "https://jobs.dragonfly.xyz/", "ashby_slug": "dragonfly", "category": "VC_Board"},
+        {"name": "Variant Fund", "url": "https://jobs.variant.fund/", "category": "VC_Board"}
       ]
     },
     "group_6": {
