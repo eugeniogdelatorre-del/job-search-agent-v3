@@ -70,44 +70,99 @@ POLL_MAX_SECONDS = 25 * 60
 
 DESCRIPTION_MAX_CHARS = 3000  # per §4.2
 
-# §4.2: LOCKED system prompt prefix. The active CV text is inlined
-# between the two `---` fences at runtime.
-SYSTEM_PREFIX = (
-    "You score Web3 job postings against a candidate's resume. Be honest. "
-    "Inflated scores waste the candidate's time. "
-    "Return JSON only, no prose, no code fences.\n\n"
-    "CANDIDATE RESUME:\n---\n"
-)
+SYSTEM_PREFIX = """\
+You are a precise job fit scoring engine. Score job listings against the candidate resume below.
+Apply every rule exactly. Return JSON only — no prose, no code fences.
+
+## SCORING SYSTEM
+
+### STEP 0.5 — LOCATION ELIGIBILITY FILTER (run first)
+Extract the candidate's location from the CV. Extract the role's location requirement.
+If the role fails (on-site/hybrid/region-restricted remote that excludes the candidate) → set final_score=0, location_eligible=false, skip all dimensions.
+Pass cases: fully remote global, fully remote restricted to candidate's country/region, hybrid in candidate's city, location unspecified.
+
+### DIMENSIONS (base total 100)
+| Dimension            | Max | Measure |
+|----------------------|-----|---------|
+| skill_match          |  15 | How closely demonstrated skills match the role's daily tasks |
+| industry_fit         |  30 | How close candidate's industry background is to role's vertical |
+| title_alignment      |  15 | Role's primary function vs candidate's primary function (discipline, not level) |
+| seniority            |  15 | Level fit, ownership model, scope of responsibility |
+| requirements         |  15 | % of explicit must-haves met, weighted by centrality |
+| geography            |  10 | Timezone fit, language mandates, remote policy |
+
+### DIMENSION RULES
+**skill_match (max 15):** Full match=100% contribution. Adjacent/transferable=50-90% transfer factor. Missing creative skills (video, graphic design) = -1 to -2 pts. Signature skills with measurable achievements = +1 to +2 boost if role requires them.
+
+**industry_fit (max 30):** Exact vertical=26-30. Adjacent vertical=17-22. Partial match=10-16. Weak/no match=0-9. Web3/crypto/DeFi/GameFi/NFT/DAO roles get +15 pts applied as a POST-scoring adjustment (not in this dimension).
+
+**title_alignment (max 15):** Perfect (same function category)=15. Similar (adjacent, meaningful overlap)=10. Long shot (different but evidenced bridge skill)=5. Mismatch=0-3. Determine from CV responsibilities, not just title.
+
+**seniority (max 15):** Role below candidate's level = positive signal, do not penalize. Multi-function/solo operator evidence in CV = +2 if role requires it.
+
+**requirements (max 15):** Central unmet must-have = -4 to -6 pts. Moderate unmet = -2 to -3. Peripheral unmet = -1. Do not penalize nice-to-haves.
+
+**geography (max 10):** Timezone diff ≤6h = no penalty. Diff >6h = -2 to -4 pts. Role welcomes candidate's region = +1 to +2.
+
+### ADJUSTMENTS (applied after summing dimensions)
+| Trigger | Amount |
+|---------|--------|
+| Role is Web3/crypto/DeFi/blockchain/NFT/DAO | +15 |
+| Mandatory language in CV at stated proficiency | +10 |
+| Mandatory language absent from CV | -20 |
+| Optional language in CV | +5 |
+| 3+ core daily-work tools missing | -3 to -5 |
+
+Final score = clamp(subtotal + net_adjustments, 0, 100).
+
+CANDIDATE RESUME:
+---
+"""
+
 SYSTEM_SUFFIX = "\n---"
 
-# §4.2: LOCKED user template.
-USER_TEMPLATE = """Score this job against the candidate's resume above.
+USER_TEMPLATE = """\
+Score this job against the candidate resume above.
 
 Job:
 - Title: {title}
 - Company: {company}
+- Location: {location}
+- Remote status: {remote_status}
 - Vertical: {vertical}
 - Function: {function_category}
 - Seniority: {seniority}
 - Description: {description}
 
-Return this exact shape:
+Return exactly this JSON shape (no extra keys, no code fences):
 {{
-  "match_score": 0,
-  "strengths": ["", "", ""],
-  "gaps": ["", "", ""],
-  "verdict_one_liner": ""
+  "location_eligible": true,
+  "final_score": 0,
+  "verdict": "",
+  "subtotal": 0,
+  "dimensions": {{
+    "skill_match":      {{"score": 0, "notes": ""}},
+    "industry_fit":     {{"score": 0, "notes": ""}},
+    "title_alignment":  {{"score": 0, "notes": ""}},
+    "seniority":        {{"score": 0, "notes": ""}},
+    "requirements":     {{"score": 0, "notes": ""}},
+    "geography":        {{"score": 0, "notes": ""}}
+  }},
+  "adjustments": [{{"label": "", "value": 0}}],
+  "strengths": [""],
+  "gaps": [""]
 }}
 
-Scoring rubric:
-- 80-100: Strong match. Apply now. Resume already shows the required experience.
-- 60-79:  Decent match. Worth tailoring CV for. Some required experience missing or weak.
-- 40-59:  Weak match. Significant gaps. Only apply if you are willing to upskill or pivot.
-- 0-39:   Not a match. Do not apply.
-
-strengths: up to 3 items, each <= 80 chars, citing specific resume bullets that match the JD.
-gaps: up to 3 items, each <= 80 chars, naming what's missing or weak.
-verdict_one_liner: single sentence under 120 chars."""
+Rules:
+- If location_eligible is false: set final_score=0, omit dimensions/adjustments/strengths/gaps.
+- verdict: one sentence, under 120 chars.
+- Each dimension notes: under 80 chars.
+- strengths: 2-4 bullets, each under 80 chars, citing specific resume evidence.
+- gaps: 2-4 bullets, each under 80 chars.
+- adjustments: list only adjustments that actually apply (can be empty list []).
+- subtotal: sum of all 6 dimension scores before adjustments (max 100).
+- final_score: clamp(subtotal + net adjustments, 0, 100).
+"""
 
 
 def _get_anthropic_client():
@@ -172,7 +227,7 @@ def _fetch_eligible_jobs(client, already_scored: set[str], limit: int) -> list[d
         resp = (
             client.table("jobs")
             .select(
-                "id,title,company,location,description,"
+                "id,title,company,location,remote_status,description,"
                 "function_category,vertical,seniority"
             )
             .eq("is_active", True)
@@ -194,6 +249,8 @@ def _build_user_message(job: dict) -> str:
     return USER_TEMPLATE.format(
         title=(job.get("title") or "")[:300],
         company=(job.get("company") or "Unknown"),
+        location=(job.get("location") or "Unspecified"),
+        remote_status=(job.get("remote_status") or "Unspecified"),
         vertical=(job.get("vertical") or "Unspecified"),
         function_category=(job.get("function_category") or "Unspecified"),
         seniority=(job.get("seniority") or "Unspecified"),
@@ -214,7 +271,7 @@ def _build_batch_requests(jobs: list[dict], resume_text: str) -> list[dict]:
             "custom_id": str(job["id"]),
             "params": {
                 "model": MODEL,
-                "max_tokens": 500,
+                "max_tokens": 800,
                 "system": [system_block],
                 "messages": [
                     {"role": "user", "content": _build_user_message(job)}
@@ -298,11 +355,55 @@ def _clamp_match_score(value) -> int | None:
 
 
 def _parsed_to_row(parsed: dict, job_id: str, resume_id: str) -> dict | None:
-    score = _clamp_match_score(parsed.get("match_score"))
+    # location filter — score 0 is valid and intentional
+    location_eligible = parsed.get("location_eligible")
+    if location_eligible is False:
+        verdict = parsed.get("verdict")
+        verdict = (verdict.strip()[:120] if isinstance(verdict, str) else None) or None
+        return {
+            "job_id": job_id,
+            "resume_id": resume_id,
+            "match_score": 0,
+            "strengths": [],
+            "gaps": [],
+            "verdict_one_liner": verdict,
+            "score_breakdown_v5": {"location_eligible": False, "verdict": verdict},
+            "scored_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    score = _clamp_match_score(parsed.get("final_score"))
     if score is None:
         return None
-    verdict = parsed.get("verdict_one_liner")
+
+    verdict = parsed.get("verdict")
     verdict = (verdict.strip()[:120] if isinstance(verdict, str) else None) or None
+
+    # Build breakdown blob — store everything for the UI
+    dims_raw = parsed.get("dimensions") or {}
+    dims = {}
+    for key in ("skill_match", "industry_fit", "title_alignment", "seniority", "requirements", "geography"):
+        cell = dims_raw.get(key) or {}
+        dims[key] = {
+            "score": int(cell.get("score") or 0),
+            "notes": str(cell.get("notes") or "")[:80],
+        }
+
+    adjustments = []
+    for adj in (parsed.get("adjustments") or []):
+        if not isinstance(adj, dict):
+            continue
+        adjustments.append({
+            "label": str(adj.get("label") or "")[:60],
+            "value": int(adj.get("value") or 0),
+        })
+
+    breakdown = {
+        "location_eligible": True,
+        "subtotal": int(parsed.get("subtotal") or 0),
+        "dimensions": dims,
+        "adjustments": adjustments,
+    }
+
     return {
         "job_id": job_id,
         "resume_id": resume_id,
@@ -310,6 +411,7 @@ def _parsed_to_row(parsed: dict, job_id: str, resume_id: str) -> dict | None:
         "strengths": _clean_str_list(parsed.get("strengths")),
         "gaps": _clean_str_list(parsed.get("gaps")),
         "verdict_one_liner": verdict,
+        "score_breakdown_v5": breakdown,
         "scored_at": datetime.now(timezone.utc).isoformat(),
     }
 
