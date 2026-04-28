@@ -93,6 +93,9 @@ export function JobCard({
         transition:  'border-color 0.18s, box-shadow 0.18s, transform 0.18s',
       }}
       onClick={onFocus ? () => onFocus(job) : undefined}
+      role={onFocus ? 'button' : undefined}
+      tabIndex={onFocus ? 0 : undefined}
+      onKeyDown={onFocus ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onFocus(job) } } : undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -165,7 +168,10 @@ export function JobCard({
         <span className="font-mono text-[10px]" style={{ color: '#3A4460' }}>
           {formatRelativeDate(job.first_seen_at)} · via {job.source}
         </span>
-        <div className="flex items-center gap-1">
+        <div
+          className="flex items-center gap-1"
+          onClick={(e) => e.stopPropagation()}
+        >
           <SaveToTrackerButton
             job_id={job.id}
             job_title_snapshot={job.title}
@@ -176,7 +182,7 @@ export function JobCard({
           />
           {applyHref && (
             <button
-              onClick={handleApply}
+              onClick={(e) => { e.stopPropagation(); handleApply() }}
               disabled={applying}
               className="font-mono text-[10px] font-semibold rounded-[5px] px-3 py-[5px] transition-transform duration-150 hover:scale-[1.03]"
               style={
