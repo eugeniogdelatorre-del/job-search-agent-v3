@@ -56,8 +56,15 @@ export function JobGrid({ rows, savedApplications }: Props) {
           savedApplicationId={savedApplications[focusedJob.id] ?? null}
         />
         {/* Breakdown panel below the card */}
-        {focusedJob.job_scores?.[0] && (
+        {focusedJob.job_scores?.[0] ? (
           <ScoreBreakdownPanel score={focusedJob.job_scores[0]} />
+        ) : (
+          <div
+            className="pt-4 mt-4 font-mono text-[11px] text-center"
+            style={{ borderTop: '1px solid #1E2330', color: '#3A4460' }}
+          >
+            AI scoring pending — run Rescore from the Resume page
+          </div>
         )}
       </div>
     </div>
