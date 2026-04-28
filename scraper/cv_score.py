@@ -200,7 +200,8 @@ def _fetch_active_resume(client) -> dict | None:
 
 
 def _fetch_already_scored_ids(client, resume_id: str) -> set[str]:
-    """Job IDs this resume has already been scored against — skip them."""
+    """Job IDs already scored with v5 breakdown for this resume — skip them.
+    Jobs with score_breakdown_v5 IS NULL are re-eligible (old v4 rows)."""
     if client is None:
         return set()
     try:
@@ -208,6 +209,7 @@ def _fetch_already_scored_ids(client, resume_id: str) -> set[str]:
             client.table("job_scores")
             .select("job_id")
             .eq("resume_id", resume_id)
+            .not_.is_("score_breakdown_v5", "null")
             .execute()
         )
         rows = getattr(resp, "data", []) or []
