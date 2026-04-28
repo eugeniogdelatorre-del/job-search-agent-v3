@@ -45,8 +45,8 @@ if __package__ in (None, ""):
 
 from scraper import budget, supabase_client
 
-# Locked to Haiku 4.5 per §4.2.
-MODEL = "claude-haiku-4-5"
+# Locked to Haiku 4.5 per §4.2. Full versioned ID required by Batch API.
+MODEL = "claude-haiku-4-5-20251001"
 
 # Base Haiku 4.5: $1 / $5 per MTok input/output. Batch API = 50% off.
 BATCH_INPUT_PER_MTOK = 0.50
@@ -209,7 +209,7 @@ def _fetch_already_scored_ids(client, resume_id: str) -> set[str]:
             client.table("job_scores")
             .select("job_id")
             .eq("resume_id", resume_id)
-            .not_.is_("score_breakdown_v5", "null")
+            .not_("score_breakdown_v5", "is", "null")
             .execute()
         )
         rows = getattr(resp, "data", []) or []
@@ -497,12 +497,30 @@ def main() -> int:
 
     print(
         f"cv_score — started={datetime.now(timezone.utc).isoformat()}  "
-        f"limit={args.limit}  dry={args.dry}"
+        f"limit={args.limit}  dry={args.dry}  model={MODEL}"
     )
+
+    # Startup env check — shows in Actions log so missing secrets are obvious.
+    has_sb_url  = bool(os.environ.get("SUPABASE_URL"))
+    has_sb_key  = bool(os.environ.get("SUPABASE_SERVICE_KEY"))
+    has_ai_key  = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    print(
+        f"  [env] SUPABASE_URL={'SET' if has_sb_url else 'MISSING'}  "
+        f"SUPABASE_SERVICE_KEY={'SET' if has_sb_key else 'MISSING'}  "
+        f"ANTHROPIC_API_KEY={'SET' if has_ai_key else 'MISSING'}"
+    )
+    if not has_sb_url or not has_sb_key:
+        print("  [fatal] Supabase secrets missing — add SUPABASE_URL and SUPABASE_SERVICE_KEY "
+              "to GitHub repo Settings → Secrets and variables → Actions", file=sys.stderr)
+        return 2
+    if not has_ai_key and not args.dry:
+        print("  [fatal] ANTHROPIC_API_KEY missing — add it to GitHub repo "
+              "Settings → Secrets and variables → Actions", file=sys.stderr)
+        return 2
 
     sb = supabase_client.get_client()
     if sb is None and not args.dry:
-        print("  [fatal] no Supabase client", file=sys.stderr)
+        print("  [fatal] Supabase client init failed (check SUPABASE_URL / SUPABASE_SERVICE_KEY values)", file=sys.stderr)
         return 2
 
     try:
@@ -513,8 +531,10 @@ def main() -> int:
 
     resume = _fetch_active_resume(sb) if sb else None
     if not resume:
-        print("  no active resume — nothing to score")
-        return 0
+        print("  [fatal] no active resume found — either Supabase credentials are wrong "
+              "(check SUPABASE_SERVICE_KEY is the service-role key, not the anon key) "
+              "or no CV has been activated on the Resume page", file=sys.stderr)
+        return 1
     resume_id = str(resume["id"])
     resume_text = (resume.get("parsed_text") or "").strip()
     if len(resume_text) < 100:
@@ -527,7 +547,8 @@ def main() -> int:
 
     jobs = _fetch_eligible_jobs(sb, already, args.limit) if sb else []
     if not jobs:
-        print("  nothing eligible (no warm unscored jobs)")
+        print("  nothing eligible — no jobs with score_total >= "
+              f"{WARM_THRESHOLD} that haven't been scored yet")
         return 0
     print(f"  {len(jobs)} jobs to score")
 
