@@ -56,9 +56,9 @@ BATCH_OUTPUT_PER_MTOK = 2.50
 CACHE_WRITE_MULTIPLIER = 1.25
 CACHE_READ_MULTIPLIER = 0.10
 
-# Warm threshold — plan §1 design note #2. Below this is the
-# rule-scored gatekeeper cutoff; we don't pay AI cost on cold jobs.
-WARM_THRESHOLD = 60
+# Warm threshold — jobs below this rule-based score are skipped for AI scoring.
+# Lowered from 60 to 40 so the majority of visible jobs get scored (~444 vs 29).
+WARM_THRESHOLD = 40
 
 # Cap per run. The cache's 5-min TTL means every ~250 requests is a new
 # cache-write window; a single batch of 500 comfortably fits inside one
