@@ -190,7 +190,7 @@ def _fetch_active_resume(client) -> dict | None:
             client.table("resumes")
             .select("id,parsed_text,char_count")
             .eq("is_active", True)
-            .maybeSingle()
+            .maybe_single()
             .execute()
         )
         return getattr(resp, "data", None)
