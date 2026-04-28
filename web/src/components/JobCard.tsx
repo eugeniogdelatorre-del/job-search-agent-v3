@@ -33,9 +33,11 @@ function RuleBadge({ score }: { score: number }) {
 export function JobCard({
   job,
   savedApplicationId,
+  onFocus,
 }: {
   job: JobWithScore
   savedApplicationId?: string | null
+  onFocus?: (job: JobWithScore) => void
 }) {
   const [hovered,  setHovered]  = useState(false)
   const [applied,  setApplied]  = useState(false)
@@ -80,7 +82,7 @@ export function JobCard({
 
   return (
     <div
-      className="relative flex flex-col gap-2.5 rounded-[10px] p-4 cursor-default select-none"
+      className={`relative flex flex-col gap-2.5 rounded-[10px] p-4 select-none ${onFocus ? 'cursor-pointer' : 'cursor-default'}`}
       style={{
         background:  '#0F1117',
         border:      `1px solid ${hovered ? 'rgba(0,212,255,0.35)' : '#1E2330'}`,
@@ -90,6 +92,7 @@ export function JobCard({
         transform:   hovered ? 'translateY(-1px)' : 'none',
         transition:  'border-color 0.18s, box-shadow 0.18s, transform 0.18s',
       }}
+      onClick={onFocus ? () => onFocus(job) : undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
