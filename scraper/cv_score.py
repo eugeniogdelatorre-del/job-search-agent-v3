@@ -328,7 +328,7 @@ def _extract_json(text: str) -> dict | None:
         return None
 
 
-def _clean_str_list(value, max_items: int = 3, max_chars: int = 80) -> list[str]:
+def _clean_str_list(value, max_items: int = 4, max_chars: int = 80) -> list[str]:
     if not isinstance(value, list):
         return []
     out: list[str] = []
@@ -367,7 +367,7 @@ def _parsed_to_row(parsed: dict, job_id: str, resume_id: str) -> dict | None:
             "strengths": [],
             "gaps": [],
             "verdict_one_liner": verdict,
-            "score_breakdown_v5": {"location_eligible": False, "verdict": verdict},
+            "score_breakdown_v5": {"location_eligible": False},
             "scored_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -402,6 +402,8 @@ def _parsed_to_row(parsed: dict, job_id: str, resume_id: str) -> dict | None:
         "subtotal": int(parsed.get("subtotal") or 0),
         "dimensions": dims,
         "adjustments": adjustments,
+        "strengths": _clean_str_list(parsed.get("strengths")),
+        "gaps": _clean_str_list(parsed.get("gaps")),
     }
 
     return {
