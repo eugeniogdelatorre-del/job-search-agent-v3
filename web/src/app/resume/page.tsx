@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ResumeUploader } from '@/components/ResumeUploader'
 import { ActivateResumeButton, RescoreButton } from '@/components/ActivateResumeButton'
+import { DeleteResumeButton } from '@/components/DeleteResumeButton'
 import { formatRelativeDate } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
@@ -99,7 +100,10 @@ export default async function ResumePage() {
                     <RescoreButton />
                   </div>
                 ) : (
-                  <ActivateResumeButton resumeId={r.id} />
+                  <div className="flex items-center gap-1.5">
+                    <ActivateResumeButton resumeId={r.id} />
+                    <DeleteResumeButton resumeId={r.id} />
+                  </div>
                 )}
               </div>
             ))}
