@@ -34,6 +34,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check required secrets
+        run: |
+          ok=true
+          [ -z "$SUPABASE_URL" ]       && echo "❌ SUPABASE_URL is not set"       && ok=false || echo "✅ SUPABASE_URL"
+          [ -z "$SUPABASE_SERVICE_KEY" ] && echo "❌ SUPABASE_SERVICE_KEY is not set" && ok=false || echo "✅ SUPABASE_SERVICE_KEY"
+          [ -z "$ANTHROPIC_API_KEY" ]  && echo "❌ ANTHROPIC_API_KEY is not set"  && ok=false || echo "✅ ANTHROPIC_API_KEY"
+          [ "$ok" = "false" ] && echo "" && echo "Add missing secrets at: repo → Settings → Secrets and variables → Actions" && exit 1 || true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
