@@ -3,7 +3,7 @@
 // shows the correct initial state (amber = saved, toggle to unsave).
 
 import Link from 'next/link'
-import { JobCard } from '@/components/JobCard'
+import { JobGrid } from '@/components/JobGrid'
 import { queryJobs } from '@/lib/jobs-query'
 import { createClient } from '@/lib/supabase/server'
 import type { Filters } from '@/lib/filters'
@@ -71,15 +71,10 @@ export async function JobList({ filters, scopeSinceDays, limit = 100 }: Props) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {rows.map((job) => (
-        <JobCard
-          key={job.id}
-          job={job}
-          savedApplicationId={savedMap.get(job.id) ?? null}
-        />
-      ))}
-    </div>
+    <JobGrid
+      rows={rows}
+      savedApplications={Object.fromEntries(savedMap)}
+    />
   )
 }
 

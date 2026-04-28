@@ -34,7 +34,7 @@ export async function queryJobs(opts: QueryOpts): Promise<QueryResult> {
   let query = supabase
     .from('jobs')
     .select(
-      '*, job_scores(match_score, strengths, gaps, verdict_one_liner, resume_id)',
+      '*, job_scores(match_score, strengths, gaps, verdict_one_liner, score_breakdown_v5, resume_id)',
       { count: withCount ? 'exact' : undefined }
     )
     .eq('is_active', true)

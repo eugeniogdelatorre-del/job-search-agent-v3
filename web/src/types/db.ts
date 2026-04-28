@@ -106,6 +106,27 @@ export type Job = {
   is_active: boolean
 }
 
+export type ScoreBreakdownDimension = {
+  score: number
+  notes: string
+}
+
+export type ScoreBreakdownV5 = {
+  location_eligible?: boolean
+  subtotal?: number
+  dimensions?: {
+    skill_match: ScoreBreakdownDimension
+    industry_fit: ScoreBreakdownDimension
+    title_alignment: ScoreBreakdownDimension
+    seniority: ScoreBreakdownDimension
+    requirements: ScoreBreakdownDimension
+    geography: ScoreBreakdownDimension
+  }
+  adjustments?: { label: string; value: number }[]
+  strengths?: string[]
+  gaps?: string[]
+}
+
 export type JobScore = {
   job_id: string
   resume_id: string
@@ -113,10 +134,11 @@ export type JobScore = {
   strengths: string[]
   gaps: string[]
   verdict_one_liner: string | null
+  score_breakdown_v5: ScoreBreakdownV5 | null
 }
 
 export type JobWithScore = Job & {
-  job_scores: Pick<JobScore, 'match_score' | 'strengths' | 'gaps' | 'verdict_one_liner'>[]
+  job_scores: Pick<JobScore, 'match_score' | 'strengths' | 'gaps' | 'verdict_one_liner' | 'score_breakdown_v5'>[]
 }
 
 export type ApplicationStatus =
