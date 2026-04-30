@@ -220,7 +220,7 @@ def _fetch_already_scored_ids(client, resume_id: str) -> set[str]:
 
 
 def _fetch_eligible_jobs(client, already_scored: set[str], limit: int) -> list[dict]:
-    """score_total >= WARM, is_active = true, not already scored for this CV."""
+    """score_total >= WARM, is_active = true, geo_filtered = true, not already scored for this CV."""
     if client is None:
         return []
     # Overfetch so exclusion of `already_scored` still leaves us close to `limit`.
@@ -233,6 +233,7 @@ def _fetch_eligible_jobs(client, already_scored: set[str], limit: int) -> list[d
                 "function_category,vertical,seniority"
             )
             .eq("is_active", True)
+            .eq("geo_filtered", True)   # only jobs that passed geo_filter
             .gte("score_total", WARM_THRESHOLD)
             .order("score_total", desc=True)
             .limit(fetch_limit)

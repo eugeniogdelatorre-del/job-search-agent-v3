@@ -114,13 +114,29 @@ even if `job_id` becomes NULL.
 
 ## Scoring config changes
 
-1. Open `/tune`, edit the JSON, Save.
-2. Next scrape (≤4h) re-scores everything it touches.
-3. To apply immediately to existing rows: Actions → `scrape.yml` →
-   manual dispatch (group 1, then group 2).
-4. Config is a **partial override**. `DEFAULT_CONFIG` in
-   `scraper/score.py` is the full shape; the saved jsonb is
-   deep-merged on top.
+The rule-based scorer's config (gates + dimension weights) is hard-coded
+in `DEFAULT_CONFIG` in `scraper/score.py`. There's no DB merge or `/tune`
+UI anymore — the AI scorer (`cv_score.py`) is the primary ranker, and
+the rule-based score now serves only as a budget gate (`score_total < 40`
+means the row is skipped by `cv_score.py`).
+
+To change weights / gates / thresholds: edit `scraper/score.py`,
+commit, push. Next scrape re-scores anything it touches; to apply
+immediately to existing rows trigger `scrape.yml` via manual dispatch.
+
+## Changing candidate location (geo_filter)
+
+Set the `CANDIDATE_LOCATION` repo variable (Settings → Secrets and
+variables → Actions → Variables) to e.g. `Buenos Aires, Argentina`.
+If unset, `geo_filter.py` falls back to extracting the location from
+the active CV. Already-filtered rows aren't re-checked — to re-evaluate
+all rows after a city change, run:
+
+```sql
+UPDATE jobs SET geo_filtered = false WHERE is_active = true;
+```
+
+then trigger `geo_filter.yml` manually.
 
 ## Weekly summary missing
 

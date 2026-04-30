@@ -1,12 +1,11 @@
 name: pipeline
 
-# Full pipeline: scrape → classify → cv-score, triggered on demand.
-# Fired by the dashboard "Run Everything" button via GitHub Actions API
-# (POST /repos/{owner}/{repo}/actions/workflows/pipeline.yml/dispatches).
+# Full pipeline: scrape → classify → geo_filter → cv-score, triggered on demand.
+# Fired by the dashboard "Run Everything" button via GitHub Actions API.
 # No schedule — manual/programmatic trigger only.
 #
-# Expected wall time: ~8 min (scrape) + ~5 min (classify) + ~5 min (cv-score)
-# = ~18–20 min end-to-end.
+# Expected wall time: ~8 min (scrape) + ~5 min (classify) + ~5 min (geo_filter)
+# + ~5 min (cv-score) = ~23–25 min end-to-end.
 
 on:
   workflow_dispatch:
@@ -63,8 +62,33 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: python scraper/classify.py
 
-  cv-score:
+  geo-filter:
     needs: [classify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: scraper/requirements.txt
+
+      - name: Install scraper dependencies
+        run: pip install -r scraper/requirements.txt
+
+      - name: Run geo_filter
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CANDIDATE_LOCATION: ${{ vars.CANDIDATE_LOCATION }}
+        run: python scraper/geo_filter.py
+
+  cv-score:
+    needs: [geo-filter]
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

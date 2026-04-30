@@ -1,6 +1,6 @@
 // Root layout. Loads IBM Plex Mono + Syne + Inter via next/font/google.
 // Applies the `dark` class permanently — this app has no light mode.
-// NavBar is mounted here so every route (including /apply, /tune, /settings
+// NavBar is mounted here so every route (including /apply, /settings
 // that previously lacked it) gets consistent navigation without per-page
 // duplication. A pt-14 wrapper offsets content below the 56px sticky bar.
 

@@ -157,18 +157,6 @@ def update_source_state(client, source_name: str, success: bool) -> None:
         print(f"  [supabase] update_source_state failed for {source_name}: {e}", file=sys.stderr)
 
 
-def fetch_scoring_config(client) -> dict:
-    """Read the single-row scoring_config.config jsonb. Returns {} if unavailable or empty."""
-    if client is None:
-        return {}
-    try:
-        resp = client.table("scoring_config").select("config").eq("id", 1).single().execute()
-        return getattr(resp, "data", {}).get("config") or {}
-    except Exception as e:
-        print(f"  [supabase] fetch scoring_config failed: {e}", file=sys.stderr)
-        return {}
-
-
 def mark_stale_inactive(client, inactive_after_days: int = 7) -> int:
     """Set is_active=false for jobs not seen in N days. Returns rows updated."""
     if client is None:

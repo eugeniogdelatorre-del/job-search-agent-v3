@@ -39,9 +39,10 @@ if __package__ in (None, ""):
 
 from scraper import budget, supabase_client
 
-# §4 locks Haiku 4.5 as the classifier model. Alias resolves to the latest
-# snapshot; if Anthropic retires it we get a clear error and can pin.
-MODEL = "claude-haiku-4-5"
+# §4 locks Haiku 4.5 as the classifier model. The Batch API requires the
+# fully-versioned snapshot ID, so we pin to the same snapshot used by
+# geo_filter.py and cv_score.py.
+MODEL = "claude-haiku-4-5-20251001"
 
 # Batch API = 50% of base rates. Haiku 4.5 base is $1/$5 per MTok,
 # so Batch is $0.50/$2.50. Prices in USD per 1M tokens.

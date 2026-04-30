@@ -1,0 +1,57 @@
+name: geo_filter
+
+# Daily at 06:00 UTC (= 03:00 ART). Runs AFTER the 04:00 UTC scrape.
+# Uses Claude Haiku 4.5 Batch API to mark location-ineligible jobs inactive.
+# cv_score.yml fires an hour later at 07:00 UTC, only scoring jobs that passed.
+#
+# The filter reads the active CV to learn the candidate's city/country.
+# Jobs that are on-site/hybrid outside that city, or remote restricted to
+# regions that exclude the candidate, are set is_active=false + geo_filtered=true.
+# Jobs that pass are marked geo_filtered=true (is_active unchanged).
+#
+# Hard kill if MTD spend > $8 (scraper/budget.py).
+# concurrency.cancel-in-progress=false to avoid orphaning an in-flight Batch poll.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Optional: cap jobs per run (default 1000)"
+        required: false
+        default: ""
+
+concurrency:
+  group: geo_filter
+  cancel-in-progress: false
+
+jobs:
+  geo_filter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: scraper/requirements.txt
+
+      - name: Install scraper dependencies
+        run: pip install -r scraper/requirements.txt
+
+      - name: Run geo_filter
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CANDIDATE_LOCATION: ${{ vars.CANDIDATE_LOCATION }}
+        run: |
+          if [ -n "${{ github.event.inputs.limit }}" ]; then
+            python scraper/geo_filter.py --limit ${{ github.event.inputs.limit }}
+          else
+            python scraper/geo_filter.py
+          fi

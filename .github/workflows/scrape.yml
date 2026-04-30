@@ -1,12 +1,12 @@
 name: scrape
 
-# Once-daily at 03:00 UTC (= 00:00 ART). Runs all sources in a single job
-# now that --group is optional (scrape.py calls get_all_sources() when omitted).
+# Once-daily at 04:00 UTC (= 01:00 ART). Runs all sources in a single job.
+# geo_filter.yml fires at 06:00 UTC and cv_score.yml at 07:00 UTC.
 # workflow_dispatch keeps an optional 'group' input for debugging partial runs.
 
 on:
   schedule:
-    - cron: "0 3 * * *"
+    - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
       group:

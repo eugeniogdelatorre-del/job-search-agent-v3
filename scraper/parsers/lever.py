@@ -21,8 +21,9 @@ name = "lever"
 
 _LEVER_URL = re.compile(
     r"https?://(?:"
-    r"jobs\.lever\.co/(?P<slug1>[a-z0-9\-]+)"
-    r"|(?P<slug2>[a-z0-9\-]+)\.lever\.co"
+    r"jobs\.lever\.co/(?P<slug1>[a-zA-Z0-9\-_]+)"
+    r"|(?:www\.)?lever\.co/(?P<slug3>[a-zA-Z0-9\-_]+)"
+    r"|(?P<slug2>[a-zA-Z0-9\-_]+)\.lever\.co"
     r")",
     re.IGNORECASE,
 )
@@ -32,7 +33,7 @@ def _extract_slug(url: str) -> str | None:
     m = _LEVER_URL.search(url or "")
     if not m:
         return None
-    return m.group("slug1") or m.group("slug2")
+    return m.group("slug1") or m.group("slug2") or m.group("slug3")
 
 
 def can_parse(source: dict) -> bool:
