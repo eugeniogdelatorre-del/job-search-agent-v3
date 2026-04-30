@@ -5,7 +5,6 @@ type Props = {
   indexed:  number
   scored:   number
   avgMatch: number | null
-  rule70:   number
   saved:    number
 }
 
@@ -28,10 +27,10 @@ function Stat({ value, label }: { value: string; label: string }) {
   )
 }
 
-export function StatsBar({ indexed, scored, avgMatch, rule70, saved }: Props) {
+export function StatsBar({ indexed, scored, avgMatch, saved }: Props) {
   return (
     <div
-      className="grid grid-cols-5 rounded-lg overflow-hidden"
+      className="grid grid-cols-4 rounded-lg overflow-hidden"
       style={{ background: '#0F1117', border: '1px solid #1E2330' }}
     >
       <Stat value={String(indexed)}             label="indexed"    />
@@ -40,9 +39,6 @@ export function StatsBar({ indexed, scored, avgMatch, rule70, saved }: Props) {
       </div>
       <div style={{ borderLeft: '1px solid #1E2330' }}>
         <Stat value={avgMatch != null ? `${avgMatch}%` : '—'} label="avg match" />
-      </div>
-      <div style={{ borderLeft: '1px solid #1E2330' }}>
-        <Stat value={String(rule70)}            label="rule ≥ 70"  />
       </div>
       <div style={{ borderLeft: '1px solid #1E2330' }}>
         <Stat value={String(saved)}             label="saved"      />

@@ -223,7 +223,7 @@ def _fetch_unfiltered_jobs(client, limit: int) -> list[dict]:
             .select("id,title,company,location,description,remote_status")
             .eq("is_active", True)
             .eq("geo_filtered", False)
-            .not_("remote_status", "is", "null")
+            .filter("remote_status", "not.is", "null")
             .limit(limit)
             .execute()
         )

@@ -12,24 +12,6 @@ import { SaveToTrackerButton } from '@/components/SaveToTrackerButton'
 import { formatRelativeDate, formatSalary } from '@/lib/format'
 import type { JobWithScore } from '@/types/db'
 
-// Rule badge — amber ≥ 70, mid 50–69, dim < 50
-function RuleBadge({ score }: { score: number }) {
-  const style =
-    score >= 70
-      ? { color: '#F5A623', background: 'rgba(245,166,35,0.10)', borderColor: 'rgba(245,166,35,0.3)' }
-      : score >= 50
-      ? { color: '#A0AABB', background: 'rgba(160,170,187,0.07)', borderColor: 'rgba(160,170,187,0.2)' }
-      : { color: '#3A4460', background: 'transparent', borderColor: '#1E2330' }
-  return (
-    <span
-      className="inline-flex items-center rounded border px-[7px] py-0.5 font-mono text-[10px] font-medium"
-      style={style}
-    >
-      rule: {score}
-    </span>
-  )
-}
-
 export function JobCard({
   job,
   savedApplicationId,
@@ -136,13 +118,12 @@ export function JobCard({
         )}
       </div>
 
-      {/* Row 3 — tags + rule badge */}
-      {(tags.length > 0 || job.score_total != null) && (
+      {/* Row 3 — tags */}
+      {tags.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           {tags.map((t) => (
             <TagPill key={t} label={t} />
           ))}
-          {job.score_total != null && <RuleBadge score={job.score_total} />}
         </div>
       )}
 

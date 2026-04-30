@@ -17,7 +17,6 @@ export type Filters = {
   seniority?: Seniority
   remote?: RemoteStatus
   salaryFloor?: number
-  scoreMin?: number
   matchMin?: number
   postedWithin?: '1d' | '7d' | '30d'
   q?: string
@@ -29,7 +28,6 @@ export const FILTER_KEYS = [
   'seniority',
   'remote',
   'salaryFloor',
-  'scoreMin',
   'matchMin',
   'postedWithin',
   'q',
@@ -52,7 +50,6 @@ export function parseFilters(sp: Record<string, string | string[] | undefined>):
     seniority: get('seniority') as Seniority | undefined,
     remote: get('remote') as RemoteStatus | undefined,
     salaryFloor: num('salaryFloor'),
-    scoreMin: num('scoreMin'),
     matchMin: num('matchMin'),
     postedWithin: get('postedWithin') as Filters['postedWithin'],
     q: get('q'),
