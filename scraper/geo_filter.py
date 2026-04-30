@@ -21,11 +21,12 @@ Columns used (must exist on the `jobs` table):
 
 Pipeline:
     1. budget.assert_under_budget()
-    2. Fetch active CV → extract candidate location text
-    3. SELECT unfiltered jobs (geo_filtered IS false AND is_active = true)
+    2. Fetch active CV → resolve candidate location (env > AI > regex > hardcoded)
+    3. SELECT unfiltered jobs (geo_filtered IS false AND is_active = true
+       AND remote_status IS NOT NULL — defer until classify has run)
     4. Build one Batch request per job
     5. Submit, poll, parse
-    6. Mark failing jobs: is_active=false, geo_filtered=true
+    6. Mark failing jobs: is_active=false, geo_filtered=true, geo_reject_reason=<AI reason>
     7. Mark passing jobs: geo_filtered=true (is_active stays true)
     8. Log spend
 
@@ -130,16 +131,46 @@ def _fetch_active_resume(client) -> dict | None:
         return None
 
 
-def _extract_candidate_location(resume_text: str) -> str:
-    """Pull the first location-like line from the resume text.
+def _ai_extract_candidate_location(anthropic_client, resume_text: str) -> str | None:
+    """Ask Haiku to pull the candidate's residence city/country from the CV.
 
-    Env override `CANDIDATE_LOCATION` wins — set it as a GitHub Actions
-    repo variable to bypass CV parsing entirely. Falls back to
-    'Buenos Aires, Argentina' if no env override and CV regex misses.
+    One non-batch call per geo_filter run (~$0.0005). Far more reliable than
+    the regex fallback, especially for CVs that don't put the city on its
+    own line (LinkedIn-style headers, multi-line addresses, etc).
     """
-    override = (os.environ.get("CANDIDATE_LOCATION") or "").strip()
-    if override:
-        return override
+    if anthropic_client is None or not resume_text:
+        return None
+    snippet = resume_text[:3000]
+    try:
+        msg = anthropic_client.messages.create(
+            model=MODEL,
+            max_tokens=40,
+            system=(
+                "You extract the candidate's current residence location from a resume. "
+                "Reply with ONLY a 'City, Country' string (no quotes, no prose, no 'Location:' prefix). "
+                "If you cannot determine it with high confidence, reply exactly: Unknown"
+            ),
+            messages=[{"role": "user", "content": snippet}],
+        )
+    except Exception as e:
+        print(f"  [anthropic] CV location extraction failed: {e}", file=sys.stderr)
+        return None
+
+    text = ""
+    for block in getattr(msg, "content", []) or []:
+        if getattr(block, "type", None) == "text":
+            text = (getattr(block, "text", "") or "").strip()
+            break
+    text = text.strip().strip('"').strip("'").rstrip(".").strip()
+    if not text or text.lower() == "unknown" or len(text) < 3 or len(text) > 100:
+        return None
+    return text
+
+
+def _regex_extract_candidate_location(resume_text: str) -> str | None:
+    """Last-resort regex extractor — kept for the case where the AI is unreachable."""
+    if not resume_text:
+        return None
     lines = resume_text.splitlines()
     loc_re = re.compile(
         r"\b(Buenos Aires|Rosario|Córdoba|Mendoza|Argentina|CABA|"
@@ -149,11 +180,29 @@ def _extract_candidate_location(resume_text: str) -> str:
         m = loc_re.search(line)
         if m:
             return m.group(0).strip()
-    # Generic fallback: look for City, Country pattern
     for line in lines[:30]:
         m = re.search(r"([A-Z][a-zA-Z ]{2,}),\s*([A-Z][a-zA-Z ]{2,})", line)
         if m:
             return m.group(0).strip()
+    return None
+
+
+def _resolve_candidate_location(anthropic_client, resume_text: str) -> str:
+    """Resolution order:
+        1. CANDIDATE_LOCATION env var (testing / CI override)
+        2. AI extraction from the active CV
+        3. Regex extraction from the active CV (offline fallback)
+        4. Hardcoded "Buenos Aires, Argentina"
+    """
+    override = (os.environ.get("CANDIDATE_LOCATION") or "").strip()
+    if override:
+        return override
+    ai = _ai_extract_candidate_location(anthropic_client, resume_text)
+    if ai:
+        return ai
+    rx = _regex_extract_candidate_location(resume_text)
+    if rx:
+        return rx
     return "Buenos Aires, Argentina"
 
 
@@ -362,14 +411,24 @@ def main() -> int:
         print(f"  [kill-switch] {e}", file=sys.stderr)
         return 3
 
-    # Fetch active CV to learn candidate location.
+    # Init the Anthropic client up-front — we use it both for CV-location
+    # extraction and for the per-job batch.
+    anthropic = None
+    if not args.dry:
+        anthropic = _get_anthropic_client()
+        if anthropic is None:
+            return 2
+
+    # Fetch active CV and resolve the candidate's location:
+    #   1. CANDIDATE_LOCATION env override (testing / CI)
+    #   2. AI extraction from CV
+    #   3. Regex fallback
+    #   4. Hard-coded "Buenos Aires, Argentina"
     resume = _fetch_active_resume(sb) if sb else None
-    if resume:
-        resume_text = (resume.get("parsed_text") or "").strip()
-        candidate_location = _extract_candidate_location(resume_text)
-    else:
-        candidate_location = "Buenos Aires, Argentina"
-        print("  [warn] no active resume — defaulting candidate location to Buenos Aires, Argentina")
+    resume_text = (resume.get("parsed_text") or "").strip() if resume else ""
+    if not resume:
+        print("  [warn] no active resume — will rely on env override or fallback")
+    candidate_location = _resolve_candidate_location(anthropic, resume_text)
     print(f"  candidate location: {candidate_location!r}")
 
     jobs = _fetch_unfiltered_jobs(sb, args.limit) if sb else []
@@ -385,10 +444,6 @@ def main() -> int:
         print("---")
         print(f"  [dry] would submit {len(jobs)} requests to Batch API")
         return 0
-
-    anthropic = _get_anthropic_client()
-    if anthropic is None:
-        return 2
 
     payload = _build_batch_requests(jobs, candidate_location)
     batch = _submit_batch(anthropic, payload)

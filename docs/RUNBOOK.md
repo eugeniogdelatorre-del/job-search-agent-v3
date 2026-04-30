@@ -126,11 +126,19 @@ immediately to existing rows trigger `scrape.yml` via manual dispatch.
 
 ## Changing candidate location (geo_filter)
 
-Set the `CANDIDATE_LOCATION` repo variable (Settings → Secrets and
-variables → Actions → Variables) to e.g. `Buenos Aires, Argentina`.
-If unset, `geo_filter.py` falls back to extracting the location from
-the active CV. Already-filtered rows aren't re-checked — to re-evaluate
-all rows after a city change, run:
+Default behavior: `geo_filter.py` asks Haiku to extract the candidate's
+city/country from the **active CV** at the start of every run. So just
+upload + activate a new CV on `/resume` and the next geo_filter run
+picks up the new location automatically.
+
+If you need to force a specific string (e.g. while testing, or if the
+AI extraction is wrong), set the `CANDIDATE_LOCATION` repo variable
+(Settings → Secrets and variables → Actions → Variables) to e.g.
+`Buenos Aires, Argentina`. Delete the variable to go back to CV-based
+extraction.
+
+Already-filtered rows aren't re-checked. To re-evaluate every row
+after the candidate location changes, run:
 
 ```sql
 UPDATE jobs SET geo_filtered = false WHERE is_active = true;

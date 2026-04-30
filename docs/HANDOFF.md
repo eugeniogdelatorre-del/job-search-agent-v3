@@ -113,7 +113,7 @@ runs. Cap trip raises `BudgetExceeded` and fires a Resend alert email
 | Name | Value |
 |---|---|
 | `WEB_BASE_URL` | `https://job-search-agent-v3.vercel.app` (no trailing slash) |
-| `CANDIDATE_LOCATION` | e.g. `Buenos Aires, Argentina` — overrides CV-text extraction in geo_filter |
+| `CANDIDATE_LOCATION` | **optional** — only set this to override the CV-based extraction (geo_filter normally asks Haiku to read the active CV) |
 
 ### Vercel (all environments unless noted)
 
