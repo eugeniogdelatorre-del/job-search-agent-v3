@@ -12,13 +12,14 @@ Status: Phases 0–9 complete. Daily driver since 2026-04.
 ## 1. One-paragraph overview
 
 Personal Web3 job aggregator. A Python scraper (GitHub Actions) hits
-~90 sources every 4 hours, dedupes, rule-scores, and persists to
-Supabase. A nightly Batch-API pass classifies new jobs and scores
-every "warm" job against the active CV using Claude Haiku 4.5 with
+~268 sources daily, dedupes, rule-scores, and persists to Supabase.
+A nightly Batch-API pipeline (classify → geo_filter → cv_score)
+classifies new jobs, drops location-ineligible roles, and scores every
+"warm" survivor against the active CV using Claude Haiku 4.5 with
 prompt caching. A small Next.js 14 dashboard on Vercel renders the
-results, lets Eugenio track applications on a kanban, tune the
-scorer, and export filtered CSVs. A weekly email digest ships Sunday
-19:00 ART. Hard budget cap: **$8/mo**. Projected run rate: **~$0.22/mo**.
+results, lets Eugenio track applications on a kanban, and export
+filtered CSVs. A weekly email digest ships Sunday 19:00 ART. Hard
+budget cap: **$8/mo**. Projected run rate: **~$0.22/mo**.
 
 ## 2. Where things live
 
@@ -35,12 +36,13 @@ Repo layout:
 
 ```
 scraper/              Python 3.12 — runs only in GitHub Actions
-  scrape.py             every 4h (matrix: group 1 + group 2)
-  classify.py           daily 06:00 UTC — new jobs
-  cv_score.py           daily 07:00 UTC — warm jobs vs. active CV
+  scrape.py             daily 04:00 UTC — all sources
+  classify.py           daily 05:00 UTC — new jobs (function/vertical/seniority/remote)
+  geo_filter.py         daily 06:00 UTC — AI location-eligibility check
+  cv_score.py           daily 07:00 UTC — warm + geo-passed jobs vs. active CV
   weekly_summary.py     Sun 22:00 UTC — top 10 by match%
   retention.py          called inside scrape.py; 60d hard delete
-  score.py              rule-based scorer + DEFAULT_CONFIG
+  score.py              rule-based scorer + hard-coded DEFAULT_CONFIG
   budget.py             $8 cap + Resend alert on trip
   supabase_client.py    service-role client
   parsers/              one module per source type
@@ -48,9 +50,9 @@ scraper/              Python 3.12 — runs only in GitHub Actions
 
 web/                  Next.js 14 App Router — deploys to Vercel
   src/app/              routes (Today, /week, /archive, /apply,
-                        /resume, /tune, /settings, /login, /api/*)
+                        /resume, /settings, /login, /api/*)
   src/components/       shadcn/ui-based components, KanbanBoard,
-                        ScoringConfigEditor, SpendChart, etc.
+                        SpendChart, etc.
   src/lib/              jobs-query, filters, format, supabase/
   middleware.ts         auth gate — getUser() not getSession()
 
@@ -82,10 +84,12 @@ All times below are UTC; Buenos Aires is UTC−3.
 
 | Workflow | Cron (UTC) | BA time | Purpose |
 |---|---|---|---|
-| `scrape.yml` | `0 */4 * * *` | every 4h | Fetch + parse + dedup + rule-score + retention sweep. Matrix splits sources into group 1 and group 2 |
-| `classify.yml` | `0 6 * * *` | 03:00 daily | Batch-classify new jobs (function / vertical / seniority / remote / salary) |
-| `cv_score.yml` | `0 7 * * *` | 04:00 daily | Batch-score every warm job (rule score ≥ 60) against the active CV |
+| `scrape.yml` | `0 4 * * *` | 01:00 daily | Fetch + parse + dedup + rule-score + retention sweep |
+| `classify.yml` | `0 5 * * *` | 02:00 daily | Batch-classify new jobs (function / vertical / seniority / remote / salary) |
+| `geo_filter.yml` | `0 6 * * *` | 03:00 daily | AI location-eligibility check vs candidate's city |
+| `cv_score.yml` | `0 7 * * *` | 04:00 daily | Batch-score every warm + geo-passed job (rule score ≥ 40) against the active CV |
 | `weekly_summary.yml` | `0 22 * * 0` | Sun 19:00 | Top-10 match-% email via Resend |
+| `pipeline.yml` | manual | — | One-click chain of scrape → classify → geo_filter → cv_score |
 
 Each workflow is idempotent and has `workflow_dispatch` for manual
 runs. Cap trip raises `BudgetExceeded` and fires a Resend alert email
@@ -101,7 +105,7 @@ runs. Cap trip raises `BudgetExceeded` and fires a Resend alert email
 |---|---|
 | `SUPABASE_URL` | all workflows |
 | `SUPABASE_SERVICE_KEY` | all workflows |
-| `ANTHROPIC_API_KEY` | classify, cv_score |
+| `ANTHROPIC_API_KEY` | classify, geo_filter, cv_score |
 | `RESEND_API_KEY` | weekly_summary, + cap-trip alert in classify/cv_score |
 
 **Variables** (same page → Variables tab):
@@ -109,6 +113,7 @@ runs. Cap trip raises `BudgetExceeded` and fires a Resend alert email
 | Name | Value |
 |---|---|
 | `WEB_BASE_URL` | `https://job-search-agent-v3.vercel.app` (no trailing slash) |
+| `CANDIDATE_LOCATION` | **optional** — only set this to override the CV-based extraction (geo_filter normally asks Haiku to read the active CV) |
 
 ### Vercel (all environments unless noted)
 
@@ -127,7 +132,6 @@ runs. Cap trip raises `BudgetExceeded` and fires a Resend alert email
 | `/archive` | Full filtered table, last 60 days, 50/page |
 | `/apply` | Kanban — Saved / Applied / Interview / Offer / Rejected. Drag-drop, notes, optimistic UI |
 | `/resume` | Upload + activate CV (PDF only, keeps last 5) |
-| `/tune` | JSON editor for scoring config (merges over `DEFAULT_CONFIG` in `score.py`) |
 | `/settings` | MTD spend chart, per-source health, account info |
 
 Filter state lives in URL search params — sharing and back-button
@@ -149,13 +153,17 @@ scrape.py (every 4h)
     ▼
 jobs table  (Supabase)
     │
-    ├─ classify.py (daily 06:00 UTC)
+    ├─ classify.py (daily 05:00 UTC)
     │    └─ Batch API — Haiku 4.5
     │       adds function / vertical / seniority / remote / salary
     │
+    ├─ geo_filter.py (daily 06:00 UTC)
+    │    └─ Batch API — Haiku 4.5
+    │       sets geo_filtered=true; is_active=false on geo-rejects
+    │
     └─ cv_score.py (daily 07:00 UTC)
          └─ Batch API + prompt caching
-            writes resume_scores rows with match_score
+            writes job_scores rows with match_score (warm + geo-passed only)
     │
     ▼
 web/ dashboard
@@ -163,7 +171,6 @@ web/ dashboard
     ├─ /today, /week, /archive    → queryJobs()
     ├─ /apply                     → applications (snapshot fields)
     ├─ /resume                    → resumes (PDF → text via unpdf)
-    ├─ /tune                      → scoring_config.config (jsonb)
     └─ /settings                  → spend_tracking, source_runs
     │
     ▼
@@ -178,8 +185,10 @@ Key design choices worth knowing:
   retention sweep even if the underlying `job_id` goes NULL.
 - **Gate-rejected jobs are kept**, not dropped, so you can see what's
   filtering and why (`score_breakdown.gate_failed`).
-- **Warm threshold** gates CV scoring at `score_total ≥ 60`. Raising
-  to 70 roughly halves CV-scored volume.
+- **Warm threshold** gates CV scoring at `score_total ≥ 40`. Lowered
+  from 60 to 40 to score the majority of visible jobs (~444 vs 29).
+  cv_score.py also requires `geo_filtered=true` so it never scores
+  jobs that failed the location check.
 - **Prompt caching on CV scoring**: the CV is in the system block
   with `cache_control: ephemeral`, so per-job cost is ~3500 cached
   (0.1× base) + 600 fresh input + 250 output.
@@ -193,9 +202,10 @@ Key design choices worth knowing:
    auto-fills the first time a card lands in Applied.
 3. **Weekly recap**: Sun evening email lands in inbox at 19:00 ART.
    Top 10 by match% for the past 7 days.
-4. **Tuning**: if too many junk matches surface, `/tune` → edit JSON
-   → Save. Next scrape (≤4h) re-scores freshly-seen jobs. To
-   re-score existing rows immediately: manual dispatch `scrape.yml`.
+4. **Tuning**: if too many junk matches surface, edit `DEFAULT_CONFIG`
+   in `scraper/score.py` (gates / weights / thresholds), commit, push.
+   Next scrape re-scores freshly-seen jobs. To re-score existing rows
+   immediately: manual dispatch `scrape.yml`.
 5. **Spend watch**: `/settings` — MTD chart. Cap is $8. Expected spend
    is pennies; anything > $1 means something's looping.
 
@@ -210,7 +220,8 @@ Full detail in `docs/RUNBOOK.md`. Short index:
 | Rotate API keys | RUNBOOK §"Rotate API keys" — both GH + Vercel as applicable |
 | Budget cap tripped | RUNBOOK §"Budget cap tripped" — SQL delete rows or raise cap |
 | Weekly summary missing | Check Actions; the usual causes are missing `RESEND_API_KEY` or no active CV |
-| Re-score existing rows after tune | Manual dispatch `scrape.yml` group 1, then group 2 |
+| Re-score existing rows after editing score.py | Manual dispatch `scrape.yml` |
+| Change candidate location for geo_filter | Set repo variable `CANDIDATE_LOCATION`; UPDATE jobs SET geo_filtered=false to re-evaluate existing rows |
 
 ## 10. Cost model (summary — full math in `docs/COST_MATH.md`)
 
@@ -228,9 +239,10 @@ loops, not expected usage. $8 sits under the $10 ceiling so retries
 between trip and alert email fit in budget.
 
 Knobs when/if costs climb (in order of effectiveness):
-1. Raise the warm threshold in `cv_score.py` (default 60 → try 70)
+1. Raise the warm threshold in `cv_score.py` (default 40 → try 50/60)
 2. Shrink description truncation in prompts (§4.1 uses 2000, §4.2 uses 3000 chars)
 3. Drop low-match aggregator sources (tier 1)
+4. Tighten gates in `score.py` to reject more rows pre-AI
 
 ## 11. Known gotchas / things that bit us
 
@@ -254,9 +266,9 @@ Knobs when/if costs climb (in order of effectiveness):
   masked `web/src/lib/`. Fixed in `bee16c2`. Don't re-add it; use
   `.venv/` and `venv/` instead.
 - **`NEXT_PUBLIC_SUPABASE_ANON_KEY`** is public by design but
-  `SUPABASE_SERVICE_KEY` is not — never expose it client-side. The
-  write path for `scoring_config` uses a service-role server route
-  because no user-scoped write policy exists.
+  `SUPABASE_SERVICE_KEY` is not — never expose it client-side. Server
+  routes that need write access (e.g. `/api/cv/*`, `/api/applications`)
+  use the service role.
 - **Source tier is stored per-job** at insert time. Changing a
   source's tier only affects rows inserted after the edit.
 
@@ -265,8 +277,7 @@ Knobs when/if costs climb (in order of effectiveness):
 - Scraper runs **only** in GitHub Actions. Never port it to Vercel —
   the 300s Fluid Compute limit and stateless model don't match.
 - Web is **read-mostly** with narrow write APIs (`/api/applications`,
-  `/api/cv/*`, `/api/tune`). Don't add direct DB writes from client
-  components.
+  `/api/cv/*`). Don't add direct DB writes from client components.
 - Every new Anthropic call goes through **Batch + prompt caching**
   unless you have a specific reason. The cost model assumes it.
 - Budget cap check (`budget.assert_under_budget`) gates every AI

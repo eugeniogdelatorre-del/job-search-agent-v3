@@ -10,8 +10,8 @@ Pipeline:
        Jobs from CJL boost companies are upgraded to tier 3 (direct company).
     4. Junk filter + aggregator title unmasher (junk_filters.clean_jobs)
     5. Dedup within this run (keep highest tier on collision)
-    6. Score every surviving job with the rule-based 6-dim scorer,
-       reading scoring_config from Supabase (merged over DEFAULT_CONFIG)
+    6. Score every surviving job with the rule-based 6-dim scorer.
+       Config is hard-coded in score.DEFAULT_CONFIG (no DB merge — /tune removed).
     7. Upsert into `jobs` with on_conflict=dedup_key
     8. Run retention (7-day inactive, 60-day delete)
 
@@ -54,7 +54,7 @@ from scraper.parsers import (
     workday,
 )
 from scraper.parsers.base import make_session
-from scraper.score import resolve_config, score_job
+from scraper.score import DEFAULT_CONFIG, score_job
 
 # Parser registry — ordered. First `can_parse(source)` match wins.
 PARSERS = [
@@ -232,7 +232,7 @@ def main() -> int:
     group_label = f"group {args.group}" if args.group is not None else "all groups"
     print(f"  {len(all_sources)} sources loaded ({group_label})")
 
-    config = resolve_config(supabase_client.fetch_scoring_config(client) if client else {})
+    config = DEFAULT_CONFIG
     print(f"  scoring thresholds: {config['thresholds']}")
 
     session = make_session()

@@ -1,16 +1,15 @@
 name: classify
 
-# Daily at 05:00 UTC (= 02:00 ART). Classifies new jobs via Claude Haiku
-# 4.5 Batch API — 50% off base rates. Runs AFTER the final 03:00 UTC
-# scrape of the night, so fresh jobs get classified in the morning run.
-# cv_score.yml fires an hour later at 07:00 UTC, picking up whatever
-# this run classified.
+# Daily at 05:00 UTC (= 02:00 ART). Runs AFTER the 04:00 UTC scrape and
+# BEFORE the 06:00 UTC geo_filter. Classifies new jobs (function_category,
+# seniority, vertical, remote_status) via Claude Haiku 4.5 Batch API.
+# geo_filter.yml needs remote_status populated before it runs — this ordering
+# ensures that. cv_score.yml fires at 07:00 UTC.
 #
 # Hard kill if MTD spend > $8 (scraper/budget.py). 30-min timeout gives
 # the Batch API plenty of slack — typical runs complete in <5 min.
 # concurrency.cancel-in-progress=false so a workflow_dispatch doesn't
-# orphan a running Batch poll (batches still complete server-side even
-# if we cancel the poll, but the write-back step would be skipped).
+# orphan a running Batch poll.
 
 on:
   schedule:

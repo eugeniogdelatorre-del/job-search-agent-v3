@@ -6,7 +6,9 @@ Uses the public Boards API:
 
 Slug extraction handles these URL shapes:
     https://boards.greenhouse.io/{slug}
+    https://job-boards.greenhouse.io/{slug}          ← new Greenhouse URL format
     https://boards.eu.greenhouse.io/{slug}
+    https://job-boards.eu.greenhouse.io/{slug}       ← EU new format
     https://boards.greenhouse.io/{slug}/jobs/...
     https://{slug}.greenhouse.io/...
     https://jobs.greenhouse.io/{slug}
@@ -27,10 +29,10 @@ name = "greenhouse"
 
 _GREENHOUSE_URL = re.compile(
     r"https?://(?:"
-    r"boards(?:-api)?\.greenhouse\.io/(?P<slug1>[a-z0-9\-]+)"
-    r"|jobs\.greenhouse\.io/(?P<slug2>[a-z0-9\-]+)"
-    r"|(?P<slug3>[a-z0-9\-]+)\.greenhouse\.io"
-    r"|boards(?:-api)?\.eu\.greenhouse\.io/(?P<slug4>[a-z0-9\-]+)"
+    r"(?:job-)?boards(?:-api)?\.greenhouse\.io/(?P<slug1>[a-zA-Z0-9\-_]+)"
+    r"|jobs\.greenhouse\.io/(?P<slug2>[a-zA-Z0-9\-_]+)"
+    r"|(?P<slug3>[a-zA-Z0-9\-_]+)\.greenhouse\.io"
+    r"|(?:job-)?boards(?:-api)?\.eu\.greenhouse\.io/(?P<slug4>[a-zA-Z0-9\-_]+)"
     r")",
     re.IGNORECASE,
 )

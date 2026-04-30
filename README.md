@@ -1,6 +1,6 @@
 # job-search-agent-v3
 
-Personal Web3 job-search automation. Scrapes ~90 sources every 4 hours, deduplicates, rule-scores, then runs a nightly AI classification + CV-match pipeline on the Anthropic Batch API. Results land in a small Next.js dashboard with a kanban apply tracker and a weekly email digest.
+Personal Web3 job-search automation. Scrapes ~268 sources daily, deduplicates, rule-scores, then runs an AI classification + geo-filter + CV-match pipeline on the Anthropic Batch API. Results land in a small Next.js dashboard with a kanban apply tracker and a weekly email digest.
 
 **Status:** Phases 0–9 complete. Daily driver for a single user (Eugenio).
 
@@ -24,7 +24,6 @@ Personal Web3 job-search automation. Scrapes ~90 sources every 4 hours, deduplic
 | `/archive` | Full filtered table, last 60d, paginated 50/page |
 | `/apply` | Kanban — Saved / Applied / Interview / Offer / Rejected |
 | `/resume` | Upload + activate CV (PDF only, last 5 kept) |
-| `/tune` | Edit rule-based scorer config (JSON) |
 | `/settings` | MTD spend chart, per-source health, account info |
 
 ## Cost
@@ -42,10 +41,12 @@ See [`JOB_SEARCH_AGENT_V3_PLAN.md`](JOB_SEARCH_AGENT_V3_PLAN.md) — the spec th
 
 | Workflow | Cron (UTC) | Purpose |
 |---|---|---|
-| `scrape.yml` | `0 */4 * * *` | Fetch + parse + dedup + rule-score all sources (matrix: group 1 + 2) |
-| `classify.yml` | `0 6 * * *` | Batch-classify new jobs (function / vertical / seniority / remote / salary) |
-| `cv_score.yml` | `0 7 * * *` | Batch-score every warm job against the active CV |
+| `scrape.yml` | `0 4 * * *` | Fetch + parse + dedup + rule-score all sources |
+| `classify.yml` | `0 5 * * *` | Batch-classify new jobs (function / vertical / seniority / remote / salary) |
+| `geo_filter.yml` | `0 6 * * *` | AI location-eligibility check vs candidate's city (uses `CANDIDATE_LOCATION` env var) |
+| `cv_score.yml` | `0 7 * * *` | Batch-score every warm + geo-passed job against the active CV |
 | `weekly_summary.yml` | `0 22 * * 0` | Sun 19:00 ART — top 10 matches by email |
+| `pipeline.yml` | manual | One-click chain of all 4 stages above |
 
 Data retention: 60 days on jobs. Applications carry snapshot fields and survive the sweep.
 

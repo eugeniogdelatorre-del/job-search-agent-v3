@@ -1,10 +1,10 @@
 """Rule-based 6-dim scorer with gates + weighted dimensions.
 
-Architecture (see docs/ARCHITECTURE.md for full discussion):
+Location filtering is no longer done here — geo_filter.py (Phase 2.5) owns
+that responsibility now. Gates left in place: title exclusions + salary floor.
 
-    1. GATES — hard rejects from v2. A job that trips any gate gets score=0
-       with the gate reason recorded. Not stored as null; null means "not yet
-       scored" (pre-AI pipeline).
+    1. GATES — hard rejects. A job that trips any gate gets score=0 with the
+       gate reason recorded. Null means "not yet scored" (pre-AI pipeline).
     2. DIMENSIONS — 6 weighted sub-scores, each 0-100:
          role_fit         (0.30)  title keyword match against PRIMARY/SECONDARY roles
          vertical_fit     (0.20)  category / vertical alignment
@@ -14,20 +14,17 @@ Architecture (see docs/ARCHITECTURE.md for full discussion):
          metrics_clarity  (0.10)  does the posting define what it wants
        Total = round(sum(dim_score * weight)) capped 0-100.
 
-Config source of truth is the `scoring_config.config` jsonb row in Supabase,
-merged on top of DEFAULT_CONFIG below. The /tune UI edits that jsonb.
-
-Defaults below port Eugenio's v2 keyword sets (PRIMARY_ROLES, WEB3_KEYWORDS,
-bilingual signals) 1:1 so first-scrape behavior matches v2 intent.
+Config is hard-coded in DEFAULT_CONFIG below. The /tune UI was removed once
+cv_score.py (AI scorer) became the primary ranker — rule-based score_total
+now serves only as a budget gate (cv_score skips rows with score_total < 40).
 """
 from __future__ import annotations
 
-import copy
 import re
 from typing import Any
 
 # ---------------------------------------------------------------------------
-# Default config (merged with DB scoring_config on load)
+# Default config — single source of truth (no DB merge)
 # ---------------------------------------------------------------------------
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -36,36 +33,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "exclusions": [
             "intern", "internship", "unpaid", "volunteer",
             "senior sales", "outside sales", "door-to-door",
-        ],
-        "location_whitelist": [
-            "remote", "worldwide", "global", "anywhere", "distributed",
-            "work from home", "wfh", "all locations", "any location",
-            "argentina", "buenos aires", "caba", "latam", "latin america",
-            "south america", "americas",
-            "brazil", "brasil", "colombia", "chile", "peru", "uruguay",
-            "mexico", "costa rica", "ecuador",
-        ],
-        "onsite_blocked_cities": [
-            "santiago", "lima", "bogota", "medellin", "sao paulo",
-            "rio de janeiro", "quito", "montevideo", "san jose",
-            "ciudad de mexico", "guadalajara", "dubai", "london",
-            "new york", "san francisco", "tel aviv", "singapore",
-            "hong kong", "belfast", "paris",
-        ],
-        "geo_restricted_markers": [
-            "us only", "usa only", "u.s. only", "united states only",
-            "us-based", "usa-based", "must be located in the us",
-            "must reside in the us", "us residents only", "us citizens only",
-            "uk only", "uk-based", "united kingdom only",
-            "eu only", "eu-based", "europe only", "european union only",
-            "canada only", "canada-based", "australia only",
-            "apac only", "emea only",
-            "authorized to work in the united states",
-        ],
-        "open_remote_markers": [
-            "worldwide", "global", "anywhere", "latam", "latin america",
-            "south america", "americas", "argentina", "buenos aires",
-            "all locations", "any location", "any country",
         ],
     },
     "dimensions": {
@@ -136,27 +103,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 
 # ---------------------------------------------------------------------------
-# Config loader (merge DB on top of defaults)
-# ---------------------------------------------------------------------------
-
-def resolve_config(db_config: dict | None) -> dict:
-    """Deep-merge `db_config` over `DEFAULT_CONFIG`."""
-    merged = copy.deepcopy(DEFAULT_CONFIG)
-    if not db_config:
-        return merged
-    return _deep_merge(merged, db_config)
-
-
-def _deep_merge(base: dict, override: dict) -> dict:
-    for k, v in override.items():
-        if isinstance(v, dict) and isinstance(base.get(k), dict):
-            _deep_merge(base[k], v)
-        else:
-            base[k] = v
-    return base
-
-
-# ---------------------------------------------------------------------------
 # Gates
 # ---------------------------------------------------------------------------
 
@@ -180,37 +126,12 @@ def check_gates(job: dict, config: dict) -> str | None:
     """Return a rejection reason string, or None if all gates pass."""
     g = config["gates"]
     title = (job.get("title") or "").lower()
-    location = (job.get("location") or "").lower()
     blob = _blob(job)
 
     # Exclusions in title
     for exc in g["exclusions"]:
         if exc in title:
             return f"title-excluded: {exc}"
-
-    # Location whitelist: pass if empty OR matches any whitelist token.
-    loc_ok = (
-        not location
-        or location in ("", "remote", "unknown")
-        or any(w in location for w in g["location_whitelist"])
-    )
-    if not loc_ok:
-        return f"location-not-accessible: {location[:60]}"
-
-    # Onsite city blocks (unless Buenos Aires)
-    is_onsite = any(
-        kw in blob for kw in ("onsite", "on-site", "in-office", "presencial")
-    )
-    if is_onsite and not any(ba in blob for ba in ("buenos aires", "argentina", "caba")):
-        for city in g["onsite_blocked_cities"]:
-            if city in location or city in title:
-                return f"onsite-blocked-city: {city}"
-
-    # Geo-restricted remote (US-only, EU-only, etc.)
-    is_open = any(m in blob for m in g["open_remote_markers"])
-    is_restricted = any(m in blob for m in g["geo_restricted_markers"])
-    if is_restricted and not is_open:
-        return "geo-restricted-remote"
 
     # Salary floor gates (listed salary OR description hourly / monthly sniff)
     floor = int(g.get("salary_floor_usd") or 0)
