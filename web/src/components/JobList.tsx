@@ -48,7 +48,7 @@ export async function JobList({ filters, scopeSinceDays, limit = 100 }: Props) {
     const anyFiltersActive =
       !!filters.function || !!filters.vertical || !!filters.seniority ||
       !!filters.remote   || !!filters.q        || !!filters.salaryFloor ||
-      !!filters.scoreMin || !!filters.matchMin  || !!filters.postedWithin
+      !!filters.matchMin || !!filters.postedWithin
 
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-2">

@@ -71,7 +71,7 @@ export async function ArchiveTable({ filters, page }: Props) {
           <table className="w-full border-collapse">
             <thead>
               <tr style={{ borderBottom: '1px solid #1E2330' }}>
-                {['Title', 'Company', 'Tags', 'Salary', 'Match', 'Rule', 'Seen', ''].map((h) => (
+                {['Title', 'Company', 'Tags', 'Salary', 'Match', 'Seen', ''].map((h) => (
                   <th
                     key={h}
                     className="px-3 py-2 text-left font-mono text-[10px] uppercase tracking-wider"
@@ -125,10 +125,6 @@ export async function ArchiveTable({ filters, page }: Props) {
                     {/* Match */}
                     <td className="px-3 py-2.5">
                       <MatchBadge score={score?.match_score ?? null} />
-                    </td>
-                    {/* Rule */}
-                    <td className="px-3 py-2.5 font-mono text-[11px] tabular-nums" style={{ color: '#6B7A99' }}>
-                      {job.score_total ?? '—'}
                     </td>
                     {/* Seen */}
                     <td className="px-3 py-2.5 font-mono text-[10px] whitespace-nowrap" style={{ color: '#3A4460' }}>

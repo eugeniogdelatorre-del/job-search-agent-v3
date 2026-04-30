@@ -58,9 +58,6 @@ export async function queryJobs(opts: QueryOpts): Promise<QueryResult> {
   if (filters.vertical) query = query.eq('vertical', filters.vertical)
   if (filters.seniority) query = query.eq('seniority', filters.seniority)
   if (filters.remote) query = query.eq('remote_status', filters.remote)
-  if (typeof filters.scoreMin === 'number') {
-    query = query.gte('score_total', filters.scoreMin)
-  }
   if (filters.salaryFloor && filters.salaryFloor > 0) {
     query = query.or(
       `salary_max_usd.gte.${filters.salaryFloor},salary_max_usd.is.null`

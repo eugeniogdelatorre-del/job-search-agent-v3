@@ -117,7 +117,6 @@ export function FilterBar({ hidePostedWithin }: Props) {
 
       {/* Numeric inputs */}
       <input type="number" placeholder="min $"   className="no-spin" style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('salaryFloor')} onFocus={onFocus} onBlur={(e) => { onBlur(e); update('salaryFloor', e.target.value) }} />
-      <input type="number" placeholder="rule ≥"  className="no-spin" style={{ ...INPUT_BASE, width: 72 }} min={0} defaultValue={val('scoreMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('scoreMin',    e.target.value) }} />
       <input type="number" placeholder="match ≥" className="no-spin" style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('matchMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('matchMin',    e.target.value) }} />
 
       {!hidePostedWithin && (

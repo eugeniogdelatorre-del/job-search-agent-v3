@@ -37,7 +37,6 @@ export default async function TodayPage({
   const scored      = rows.filter((r) => r.job_scores?.[0]?.match_score != null).length
   const matchScores = rows.flatMap((r) => r.job_scores ?? []).map((s) => s.match_score).filter((s): s is number => s != null)
   const avgMatch    = matchScores.length > 0 ? Math.round(matchScores.reduce((a, b) => a + b, 0) / matchScores.length) : null
-  const rule70      = rows.filter((r) => (r.score_total ?? 0) >= 70).length
   const savedCount  = appCountResult.count ?? 0
 
   const now     = new Date()
@@ -73,7 +72,6 @@ export default async function TodayPage({
         indexed={indexed}
         scored={scored}
         avgMatch={avgMatch}
-        rule70={rule70}
         saved={savedCount}
       />
 

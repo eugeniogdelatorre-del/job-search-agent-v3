@@ -209,7 +209,7 @@ def _fetch_already_scored_ids(client, resume_id: str) -> set[str]:
             client.table("job_scores")
             .select("job_id")
             .eq("resume_id", resume_id)
-            .not_("score_breakdown_v5", "is", "null")
+            .filter("score_breakdown_v5", "not.is", "null")
             .execute()
         )
         rows = getattr(resp, "data", []) or []
