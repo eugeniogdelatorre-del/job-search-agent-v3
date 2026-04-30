@@ -157,8 +157,8 @@ Rules:
 - If location_eligible is false: set final_score=0, omit dimensions/adjustments/strengths/gaps.
 - verdict: one sentence, under 120 chars.
 - Each dimension notes: under 80 chars.
-- strengths: 2-4 bullets, each under 80 chars, citing specific resume evidence.
-- gaps: 2-4 bullets, each under 80 chars.
+- strengths: 2-4 bullets, each under 140 chars, citing specific resume evidence.
+- gaps: 2-4 bullets, each under 140 chars.
 - adjustments: list only adjustments that actually apply (can be empty list []).
 - subtotal: sum of all 6 dimension scores before adjustments (max 100).
 - final_score: clamp(subtotal + net adjustments, 0, 100).
@@ -331,7 +331,7 @@ def _extract_json(text: str) -> dict | None:
         return None
 
 
-def _clean_str_list(value, max_items: int = 4, max_chars: int = 80) -> list[str]:
+def _clean_str_list(value, max_items: int = 4, max_chars: int = 140) -> list[str]:
     if not isinstance(value, list):
         return []
     out: list[str] = []
