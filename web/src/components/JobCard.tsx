@@ -2,10 +2,11 @@
 
 // JobCard — Bloomberg-terminal dark redesign.
 // Hover: cyan border glow + translateY(-1px) + top shimmer line.
-// Apply button toggles to "applied ✓" state and persists via /api/applications.
+// Apply button opens the role in a new tab. It does NOT auto-track —
+// the user explicitly bookmarks via SaveToTrackerButton when they want
+// the role on the kanban.
 
 import { useState } from 'react'
-import { toast } from 'sonner'
 import { TagPill } from '@/components/TagPill'
 import { MatchBadge } from '@/components/MatchBadge'
 import { SaveToTrackerButton } from '@/components/SaveToTrackerButton'
@@ -21,37 +22,15 @@ export function JobCard({
   savedApplicationId?: string | null
   onFocus?: (job: JobWithScore) => void
 }) {
-  const [hovered,  setHovered]  = useState(false)
-  const [applied,  setApplied]  = useState(false)
-  const [applying, setApplying] = useState(false)
+  const [hovered, setHovered] = useState(false)
 
   const score      = job.job_scores?.[0]
   const salary     = formatSalary(job.salary_min_usd, job.salary_max_usd)
   const applyHref  = job.apply_url ?? job.source_url ?? undefined
 
-  async function handleApply() {
-    if (applied || applying || !applyHref) return
-    // Open the link
+  function handleApply() {
+    if (!applyHref) return
     window.open(applyHref, '_blank', 'noopener,noreferrer')
-    setApplying(true)
-    try {
-      await fetch('/api/applications', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          job_id:                job.id,
-          job_title_snapshot:    job.title,
-          company_snapshot:      job.company,
-          apply_url_snapshot:    applyHref,
-          source_snapshot:       job.source,
-        }),
-      })
-      setApplied(true)
-    } catch {
-      toast.error('Could not save to tracker')
-    } finally {
-      setApplying(false)
-    }
   }
 
   // Tags: function, vertical, seniority (skip Unspecified), remote (skip Unspecified)
@@ -164,23 +143,14 @@ export function JobCard({
           {applyHref && (
             <button
               onClick={(e) => { e.stopPropagation(); handleApply() }}
-              disabled={applying}
               className="font-mono text-[10px] font-semibold rounded-[5px] px-3 py-[5px] transition-transform duration-150 hover:scale-[1.03]"
-              style={
-                applied
-                  ? {
-                      background: 'rgba(0,212,255,0.15)',
-                      border: '1px solid rgba(0,212,255,0.4)',
-                      color: '#00D4FF',
-                    }
-                  : {
-                      background: '#00D4FF',
-                      border: '1px solid #00D4FF',
-                      color: '#000',
-                    }
-              }
+              style={{
+                background: '#00D4FF',
+                border: '1px solid #00D4FF',
+                color: '#000',
+              }}
             >
-              {applied ? 'applied ✓' : 'apply →'}
+              apply →
             </button>
           )}
         </div>
