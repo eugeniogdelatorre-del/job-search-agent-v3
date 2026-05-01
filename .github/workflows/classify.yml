@@ -12,8 +12,10 @@ name: classify
 # orphan a running Batch poll.
 
 on:
-  schedule:
-    - cron: "0 5 * * *"
+  # Daily schedule paused 2026-04-30 — running manually via workflow_dispatch
+  # / pipeline.yml until source-audit fixes settle. To resume, restore:
+  #   schedule:
+  #     - cron: "0 5 * * *"
   workflow_dispatch:
     inputs:
       limit:

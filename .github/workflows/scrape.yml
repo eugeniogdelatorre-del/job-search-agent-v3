@@ -5,8 +5,10 @@ name: scrape
 # workflow_dispatch keeps an optional 'group' input for debugging partial runs.
 
 on:
-  schedule:
-    - cron: "0 4 * * *"
+  # Daily schedule paused 2026-04-30 — running manually via workflow_dispatch
+  # / pipeline.yml until source-audit fixes settle. To resume, restore:
+  #   schedule:
+  #     - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
       group:
