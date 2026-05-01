@@ -59,20 +59,6 @@ export default async function SettingsPage() {
       ) : (
         <SourceHealthTable rows={healthRes.data ?? []} />
       )}
-
-      <div
-        className="rounded-[10px] p-4"
-        style={{ background: '#0F1117', border: '1px solid #1E2330' }}
-      >
-        <h2 className="font-heading font-bold text-sm" style={{ color: '#E8ECF0' }}>
-          Account
-        </h2>
-        <p className="mt-2 font-body text-xs leading-relaxed" style={{ color: '#6B7A99' }}>
-          Single-user install · magic-link only · rotate API keys in GitHub (Actions) and Vercel
-          (Project → Environment Variables) · data retention is 60 days on jobs, applications carry
-          snapshot fields so the tracker survives deletion.
-        </p>
-      </div>
     </main>
   )
 }

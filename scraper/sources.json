@@ -2,7 +2,7 @@
   "metadata": {
     "version": "2.2.0",
     "last_updated": "2026-04-29",
-    "total_sources": 268,
+    "total_sources": 248,
     "groups": 6,
     "schedule_note": "Each group runs once daily at its designated UTC hour to stay within free tier limits",
     "cjl_boost_companies": [
@@ -61,11 +61,6 @@
           "category": "CEX"
         },
         {
-          "name": "Tron",
-          "url": "https://boards.greenhouse.io/tron",
-          "category": "L1"
-        },
-        {
           "name": "Arbitrum",
           "url": "https://jobs.arbitrum.io/",
           "category": "L2"
@@ -101,13 +96,8 @@
           "category": "L1"
         },
         {
-          "name": "Near Protocol",
-          "url": "https://careers.near.org/",
-          "category": "L1"
-        },
-        {
           "name": "Fuel Network",
-          "url": "https://fuel.network/careers",
+          "url": "https://jobs.lever.co/fuellabs",
           "category": "L2"
         },
         {
@@ -137,7 +127,7 @@
         },
         {
           "name": "Paxos",
-          "url": "https://boards.greenhouse.io/paxos",
+          "url": "https://job-boards.greenhouse.io/joinpaxos",
           "category": "Stablecoin"
         },
         {
@@ -163,7 +153,8 @@
         {
           "name": "Sui Foundation",
           "url": "https://jobs.ashbyhq.com/Sui%20Foundation",
-          "category": "L1"
+          "category": "L1",
+          "ashby_slug": "sui%20foundation"
         },
         {
           "name": "Stellar",
@@ -204,11 +195,6 @@
           "name": "StarkNet",
           "url": "https://www.starknet.org/careers",
           "category": "L2"
-        },
-        {
-          "name": "Midnight Network",
-          "url": "https://midnight.network/careers",
-          "category": "L1"
         },
         {
           "name": "Flare Network",
@@ -301,11 +287,6 @@
           "category": "L1"
         },
         {
-          "name": "Conflux",
-          "url": "https://wellfound.com/company/confluxnetwork/jobs",
-          "category": "L1"
-        },
-        {
           "name": "Kaia Labs",
           "url": "https://kaia-labs.careers.team/job-descriptions",
           "category": "L1"
@@ -332,23 +313,13 @@
           "category": "DeFi"
         },
         {
-          "name": "MakerDAO / Sky",
-          "url": "https://makerdao.com/en/careers",
-          "category": "DeFi"
-        },
-        {
           "name": "Uniswap",
           "url": "https://uniswap.org/careers",
           "category": "DeFi"
         },
         {
           "name": "Lido",
-          "url": "https://lido.fi/careers",
-          "category": "DeFi"
-        },
-        {
-          "name": "Ethena",
-          "url": "https://www.ethena.fi/careers",
+          "url": "https://jobs.ashbyhq.com/Lido.fi",
           "category": "DeFi"
         },
         {
@@ -363,7 +334,7 @@
         },
         {
           "name": "Bitso",
-          "url": "https://bitso.com/careers",
+          "url": "https://boards.greenhouse.io/bitso",
           "category": "CEX"
         },
         {
@@ -383,7 +354,7 @@
         },
         {
           "name": "Galaxy Digital",
-          "url": "https://www.galaxydigital.com/careers",
+          "url": "https://job-boards.greenhouse.io/galaxydigitalservices",
           "category": "Custody"
         },
         {
@@ -393,12 +364,12 @@
         },
         {
           "name": "Exodus",
-          "url": "https://www.exodus.com/careers",
+          "url": "https://job-boards.greenhouse.io/exodus54",
           "category": "Wallet"
         },
         {
           "name": "Ondo Finance",
-          "url": "https://ondo.finance/careers",
+          "url": "https://jobs.lever.co/ondofinance",
           "category": "RWA"
         },
         {
@@ -407,19 +378,9 @@
           "category": "RWA"
         },
         {
-          "name": "Reental",
-          "url": "https://reental.co/en/careers",
-          "category": "RWA"
-        },
-        {
           "name": "Fireblocks",
           "url": "https://job-boards.greenhouse.io/fireblocks",
           "category": "Custody"
-        },
-        {
-          "name": "Gnosis",
-          "url": "https://boards.greenhouse.io/gnosis",
-          "category": "DeFi"
         },
         {
           "name": "Uniswap Foundation",
@@ -443,7 +404,7 @@
         },
         {
           "name": "CoinTracker",
-          "url": "https://jobs.lever.co/cointracker",
+          "url": "https://jobs.ashbyhq.com/cointracker",
           "category": "FinTech"
         },
         {
@@ -662,11 +623,6 @@
           "category": "Stablecoin"
         },
         {
-          "name": "Story Foundation",
-          "url": "https://careers.story.foundation/jobs",
-          "category": "L1"
-        },
-        {
           "name": "Somnia",
           "url": "https://jobs.ashbyhq.com/somnia",
           "category": "L1"
@@ -714,7 +670,7 @@
         },
         {
           "name": "Animoca Brands",
-          "url": "https://www.animocabrands.com/careers",
+          "url": "https://jobs.lever.co/animocabrands",
           "category": "Gaming"
         },
         {
@@ -754,7 +710,7 @@
         },
         {
           "name": "Wormhole",
-          "url": "https://wormhole.com/careers",
+          "url": "https://job-boards.greenhouse.io/wormholefoundation",
           "category": "Bridge"
         },
         {
@@ -764,7 +720,7 @@
         },
         {
           "name": "Magic Eden",
-          "url": "https://magiceden.io/careers",
+          "url": "https://boards.greenhouse.io/magiceden",
           "category": "NFT"
         },
         {
@@ -789,7 +745,7 @@
         },
         {
           "name": "Dapper Labs",
-          "url": "https://boards.greenhouse.io/dapperlabs",
+          "url": "https://jobs.lever.co/axiomzen",
           "category": "NFT"
         },
         {
@@ -814,17 +770,17 @@
         },
         {
           "name": "OpenSea",
-          "url": "https://jobs.lever.co/opensea",
+          "url": "https://jobs.ashbyhq.com/OpenSea",
           "category": "NFT"
         },
         {
           "name": "Phantom",
-          "url": "https://jobs.lever.co/phantom",
+          "url": "https://jobs.ashbyhq.com/phantom",
           "category": "Wallet"
         },
         {
           "name": "Matter Labs (zkSync)",
-          "url": "https://jobs.lever.co/matterlabs",
+          "url": "https://jobs.ashbyhq.com/matter-labs",
           "category": "L2"
         },
         {
@@ -834,7 +790,7 @@
         },
         {
           "name": "Alchemy",
-          "url": "https://jobs.lever.co/alchemy",
+          "url": "https://boards.greenhouse.io/alchemy",
           "category": "Infra"
         },
         {
@@ -863,11 +819,6 @@
           "category": "AI-Crypto"
         },
         {
-          "name": "Flock.io",
-          "url": "https://www.flock.io/careers",
-          "category": "AI-Crypto"
-        },
-        {
           "name": "Space and Time",
           "url": "https://www.spaceandtime.io/careers",
           "category": "AI-Crypto"
@@ -881,11 +832,6 @@
           "name": "Storj",
           "url": "https://www.storj.io/company/careers",
           "category": "Storage"
-        },
-        {
-          "name": "Holochain",
-          "url": "https://www.holochain.org/careers",
-          "category": "Infra"
         },
         {
           "name": "Nym",
@@ -938,13 +884,8 @@
           "category": "Infra"
         },
         {
-          "name": "Allora Labs",
-          "url": "https://alloralabs.bamboohr.com/careers",
-          "category": "AI-Crypto"
-        },
-        {
           "name": "Illuvium",
-          "url": "https://illuvium.io/jobs",
+          "url": "https://boards.greenhouse.io/illuvium",
           "category": "Gaming"
         },
         {
@@ -1028,16 +969,6 @@
           "category": "L1"
         },
         {
-          "name": "Space ID",
-          "url": "https://wellfound.com/company/space-id",
-          "category": "Infra"
-        },
-        {
-          "name": "World Mobile",
-          "url": "https://worldmobile.bamboohr.com/careers",
-          "category": "Telecom"
-        },
-        {
           "name": "WeFi",
           "url": "https://www.wefi.co/careers",
           "category": "DeFi"
@@ -1051,11 +982,6 @@
           "name": "GoMining",
           "url": "https://gomining.com/es/careers",
           "category": "Mining"
-        },
-        {
-          "name": "Mantra (BambooHR)",
-          "url": "https://mantra.bamboohr.com/careers",
-          "category": "RWA"
         },
         {
           "name": "Sia Foundation",
@@ -1076,11 +1002,6 @@
           "name": "AltLayer",
           "url": "https://alt-research.notion.site/Careers-AltLayer-b81ba67574d344d5bc85944f64840a2e",
           "category": "L2"
-        },
-        {
-          "name": "Numerai",
-          "url": "https://wellfound.com/company/numerai/jobs",
-          "category": "AI-Crypto"
         },
         {
           "name": "Biconomy (Careers)",
@@ -1129,11 +1050,6 @@
           "category": "Remote_Board"
         },
         {
-          "name": "Remotive",
-          "url": "https://remotive.com/remote-jobs/blockchain",
-          "category": "Remote_Board"
-        },
-        {
           "name": "Remote OK",
           "url": "https://remoteok.com/remote-crypto-jobs",
           "category": "Remote_Board"
@@ -1141,11 +1057,6 @@
         {
           "name": "GetOnBoard",
           "url": "https://www.getonbrd.com/jobs/blockchain",
-          "category": "LATAM_Board"
-        },
-        {
-          "name": "Torre",
-          "url": "https://torre.ai/jobs?q=blockchain",
           "category": "LATAM_Board"
         },
         {
@@ -1185,13 +1096,8 @@
       "cron_utc": "0 22 * * *",
       "sources": [
         {
-          "name": "SignalFire",
-          "url": "https://signalfire.com/careers",
-          "category": "VC"
-        },
-        {
           "name": "Spruce Systems",
-          "url": "https://spruceid.com/careers",
+          "url": "https://jobs.ashbyhq.com/spruceid",
           "category": "Identity"
         },
         {
@@ -1210,13 +1116,8 @@
           "category": "Exchange"
         },
         {
-          "name": "Kleros",
-          "url": "https://kleros.io/careers",
-          "category": "Dispute"
-        },
-        {
           "name": "Bluesky",
-          "url": "https://bsky.app/jobs",
+          "url": "https://boards.greenhouse.io/blueskysocial",
           "category": "Social"
         },
         {
@@ -1246,7 +1147,7 @@
         },
         {
           "name": "Pantera Capital",
-          "url": "https://jobs.lever.co/pantera-capital",
+          "url": "https://boards.greenhouse.io/panteracapitalcareers",
           "category": "VC"
         },
         {

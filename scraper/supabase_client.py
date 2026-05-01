@@ -108,10 +108,16 @@ def fetch_suspended_sources(client) -> set[str]:
         return set()
 
 
+# Suspend a source after 7 consecutive failed daily scrapes (= 1 full week).
+# Was 5; bumped to 7 so a week-long upstream outage doesn't suspend an
+# otherwise healthy source.
+SUSPEND_AFTER_CONSECUTIVE_FAILURES = 7
+
+
 def update_source_state(client, source_name: str, success: bool) -> None:
     """Increment or reset consecutive_failures for a source.
 
-    On the 5th consecutive failure the source is marked suspended=true.
+    On the 7th consecutive failure the source is marked suspended=true.
     On any success the counter resets and suspended is cleared.
     Uses upsert so the row is created on first encounter.
     """
@@ -141,7 +147,7 @@ def update_source_state(client, source_name: str, success: bool) -> None:
             }
         else:
             new_failures = failures + 1
-            newly_suspended = new_failures >= 5
+            newly_suspended = new_failures >= SUSPEND_AFTER_CONSECUTIVE_FAILURES
             row = {
                 "source_name": source_name,
                 "consecutive_failures": new_failures,
