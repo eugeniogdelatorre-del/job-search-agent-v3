@@ -13,8 +13,10 @@ name: geo_filter
 # concurrency.cancel-in-progress=false to avoid orphaning an in-flight Batch poll.
 
 on:
-  schedule:
-    - cron: "0 6 * * *"
+  # Daily schedule paused 2026-04-30 — running manually via workflow_dispatch
+  # / pipeline.yml until source-audit fixes settle. To resume, restore:
+  #   schedule:
+  #     - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
       limit:
