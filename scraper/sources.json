@@ -1,8 +1,8 @@
 {
   "metadata": {
     "version": "2.2.0",
-    "last_updated": "2026-04-29",
-    "total_sources": 248,
+    "last_updated": "2026-04-30",
+    "total_sources": 412,
     "groups": 6,
     "schedule_note": "Each group runs once daily at its designated UTC hour to stay within free tier limits",
     "cjl_boost_companies": [
@@ -1266,6 +1266,826 @@
           "name": "Variant Fund",
           "url": "https://jobs.variant.fund/",
           "category": "VC_Board"
+        },
+        {
+          "name": "0G Labs",
+          "url": "https://jobs.ashbyhq.com/0g",
+          "category": "Infra"
+        },
+        {
+          "name": "0x",
+          "url": "https://jobs.ashbyhq.com/0x",
+          "category": "Infra"
+        },
+        {
+          "name": "AirSwap",
+          "url": "https://jobs.ashbyhq.com/air",
+          "category": "AI"
+        },
+        {
+          "name": "Allium",
+          "url": "https://jobs.ashbyhq.com/allium",
+          "category": "Analytics"
+        },
+        {
+          "name": "Alpen Labs",
+          "url": "https://jobs.ashbyhq.com/alpenlabs",
+          "category": "Infra"
+        },
+        {
+          "name": "Arrakis Finance",
+          "url": "https://jobs.ashbyhq.com/arrakis",
+          "category": "DeFi"
+        },
+        {
+          "name": "Asymmetric Research",
+          "url": "https://jobs.ashbyhq.com/asymmetric.re",
+          "category": "Infra"
+        },
+        {
+          "name": "Ava Labs",
+          "url": "https://jobs.ashbyhq.com/ava-labs",
+          "category": "Infra"
+        },
+        {
+          "name": "Avalanche Foundation",
+          "url": "https://jobs.ashbyhq.com/avalanche-foundation",
+          "category": "Infra"
+        },
+        {
+          "name": "Aztec Labs",
+          "url": "https://jobs.ashbyhq.com/aztec-labs",
+          "category": "L2"
+        },
+        {
+          "name": "Backpack Exchange",
+          "url": "https://jobs.ashbyhq.com/backpack",
+          "category": "CEX"
+        },
+        {
+          "name": "Base (Coinbase)",
+          "url": "https://jobs.ashbyhq.com/base",
+          "category": "CEX"
+        },
+        {
+          "name": "Bifrost",
+          "url": "https://jobs.ashbyhq.com/bifrost",
+          "category": "Infra"
+        },
+        {
+          "name": "Binance.US",
+          "url": "https://jobs.ashbyhq.com/binance.us",
+          "category": "CEX"
+        },
+        {
+          "name": "Bitvavo",
+          "url": "https://jobs.ashbyhq.com/bitvavo",
+          "category": "CEX"
+        },
+        {
+          "name": "Blockdaemon",
+          "url": "https://jobs.ashbyhq.com/blockdaemon",
+          "category": "Custody"
+        },
+        {
+          "name": "Blockstream",
+          "url": "https://jobs.ashbyhq.com/blockstream",
+          "category": "Infra"
+        },
+        {
+          "name": "Blockworks",
+          "url": "https://jobs.ashbyhq.com/Blockworks",
+          "category": "Infra"
+        },
+        {
+          "name": "Casa",
+          "url": "https://jobs.ashbyhq.com/casa",
+          "category": "Infra"
+        },
+        {
+          "name": "Castle Island Ventures",
+          "url": "https://jobs.ashbyhq.com/castle",
+          "category": "VC"
+        },
+        {
+          "name": "Chainlink Labs",
+          "url": "https://jobs.ashbyhq.com/chainlink-labs",
+          "category": "Oracle"
+        },
+        {
+          "name": "Chakra Labs",
+          "url": "https://jobs.ashbyhq.com/chakra-labs",
+          "category": "Infra"
+        },
+        {
+          "name": "Compound Labs",
+          "url": "https://jobs.ashbyhq.com/compound",
+          "category": "DeFi"
+        },
+        {
+          "name": "Conduit",
+          "url": "https://jobs.ashbyhq.com/conduit",
+          "category": "Infra"
+        },
+        {
+          "name": "Cryptio",
+          "url": "https://jobs.ashbyhq.com/cryptio",
+          "category": "Infra"
+        },
+        {
+          "name": "Cubist",
+          "url": "https://jobs.ashbyhq.com/cubist",
+          "category": "Infra"
+        },
+        {
+          "name": "Delphi Labs",
+          "url": "https://jobs.ashbyhq.com/delphi",
+          "category": "VC"
+        },
+        {
+          "name": "Doppler Finance",
+          "url": "https://jobs.ashbyhq.com/doppler",
+          "category": "Infra"
+        },
+        {
+          "name": "DoubleZero",
+          "url": "https://jobs.ashbyhq.com/doublezero",
+          "category": "Infra"
+        },
+        {
+          "name": "Dune Analytics",
+          "url": "https://jobs.ashbyhq.com/dune",
+          "category": "Analytics"
+        },
+        {
+          "name": "Dynamic",
+          "url": "https://jobs.ashbyhq.com/dynamic",
+          "category": "Infra"
+        },
+        {
+          "name": "Elliptic",
+          "url": "https://jobs.ashbyhq.com/elliptic",
+          "category": "Analytics"
+        },
+        {
+          "name": "ENS Labs",
+          "url": "https://jobs.ashbyhq.com/ens-labs",
+          "category": "Infra"
+        },
+        {
+          "name": "Espresso Systems",
+          "url": "https://jobs.ashbyhq.com/espresso",
+          "category": "Infra"
+        },
+        {
+          "name": "Ethereum Foundation",
+          "url": "https://jobs.ashbyhq.com/ethereum-foundation",
+          "category": "Infra"
+        },
+        {
+          "name": "ETHGlobal",
+          "url": "https://jobs.ashbyhq.com/ethglobal",
+          "category": "Infra"
+        },
+        {
+          "name": "Flashbots",
+          "url": "https://jobs.ashbyhq.com/flashbots.net",
+          "category": "Infra"
+        },
+        {
+          "name": "Flux Finance",
+          "url": "https://jobs.ashbyhq.com/flux",
+          "category": "Infra"
+        },
+        {
+          "name": "Fuse Network",
+          "url": "https://jobs.ashbyhq.com/fuse",
+          "category": "Infra"
+        },
+        {
+          "name": "Helius",
+          "url": "https://jobs.ashbyhq.com/helius",
+          "category": "Infra"
+        },
+        {
+          "name": "Hyper Foundation",
+          "url": "https://jobs.ashbyhq.com/hyperliquid",
+          "category": "Infra"
+        },
+        {
+          "name": "Jito Labs",
+          "url": "https://jobs.ashbyhq.com/jito-labs",
+          "category": "Infra"
+        },
+        {
+          "name": "LI.FI",
+          "url": "https://jobs.ashbyhq.com/li.fi",
+          "category": "Bridge"
+        },
+        {
+          "name": "M^0 Labs",
+          "url": "https://jobs.ashbyhq.com/m0",
+          "category": "Stablecoin"
+        },
+        {
+          "name": "Mango Markets",
+          "url": "https://jobs.ashbyhq.com/mango-markets",
+          "category": "DeFi"
+        },
+        {
+          "name": "Maple Finance",
+          "url": "https://jobs.ashbyhq.com/maple",
+          "category": "RWA"
+        },
+        {
+          "name": "Meridian AMM",
+          "url": "https://jobs.ashbyhq.com/meridian",
+          "category": "Infra"
+        },
+        {
+          "name": "Morpho Labs",
+          "url": "https://jobs.ashbyhq.com/morpho",
+          "category": "DeFi"
+        },
+        {
+          "name": "OP Labs (Optimism)",
+          "url": "https://jobs.ashbyhq.com/op-labs",
+          "category": "L2"
+        },
+        {
+          "name": "P2P.org",
+          "url": "https://jobs.ashbyhq.com/p2p.org",
+          "category": "Infra"
+        },
+        {
+          "name": "Pendle Finance",
+          "url": "https://jobs.ashbyhq.com/pendle",
+          "category": "DeFi"
+        },
+        {
+          "name": "Pyth Network",
+          "url": "https://jobs.ashbyhq.com/pyth-network",
+          "category": "Oracle"
+        },
+        {
+          "name": "Ramp Network",
+          "url": "https://jobs.ashbyhq.com/ramp",
+          "category": "Infra"
+        },
+        {
+          "name": "Sanctum",
+          "url": "https://jobs.ashbyhq.com/sanctum",
+          "category": "Infra"
+        },
+        {
+          "name": "Spearbit / Cantina",
+          "url": "https://jobs.ashbyhq.com/spearbit",
+          "category": "Infra"
+        },
+        {
+          "name": "Starknet Foundation",
+          "url": "https://jobs.ashbyhq.com/starkware",
+          "category": "L2"
+        },
+        {
+          "name": "Syndica",
+          "url": "https://jobs.ashbyhq.com/syndica",
+          "category": "Infra"
+        },
+        {
+          "name": "Tally",
+          "url": "https://jobs.ashbyhq.com/tally",
+          "category": "Infra"
+        },
+        {
+          "name": "Token Terminal",
+          "url": "https://jobs.ashbyhq.com/token-terminal",
+          "category": "Analytics"
+        },
+        {
+          "name": "Turnkey",
+          "url": "https://jobs.ashbyhq.com/turnkey",
+          "category": "Infra"
+        },
+        {
+          "name": "Velodrome",
+          "url": "https://jobs.ashbyhq.com/velodrome",
+          "category": "Infra"
+        },
+        {
+          "name": "Zora",
+          "url": "https://jobs.ashbyhq.com/zora",
+          "category": "L2"
+        },
+        {
+          "name": "21Shares",
+          "url": "https://boards.greenhouse.io/21shares",
+          "category": "Infra"
+        },
+        {
+          "name": "a16z crypto",
+          "url": "https://boards.greenhouse.io/a16z",
+          "category": "VC"
+        },
+        {
+          "name": "Agoric",
+          "url": "https://boards.greenhouse.io/agoric",
+          "category": "VC"
+        },
+        {
+          "name": "Alpaca Finance",
+          "url": "https://boards.greenhouse.io/alpaca",
+          "category": "Infra"
+        },
+        {
+          "name": "Apex Exchange",
+          "url": "https://boards.greenhouse.io/apex",
+          "category": "CEX"
+        },
+        {
+          "name": "Aptos Labs",
+          "url": "https://boards.greenhouse.io/aptoslabs",
+          "category": "L1"
+        },
+        {
+          "name": "Aura Finance",
+          "url": "https://boards.greenhouse.io/aura",
+          "category": "DeFi"
+        },
+        {
+          "name": "B2C2",
+          "url": "https://boards.greenhouse.io/b2c2",
+          "category": "Infra"
+        },
+        {
+          "name": "BVNK",
+          "url": "https://boards.greenhouse.io/bvnk",
+          "category": "Infra"
+        },
+        {
+          "name": "Caladan",
+          "url": "https://boards.greenhouse.io/caladan",
+          "category": "Infra"
+        },
+        {
+          "name": "Carbon DeFi",
+          "url": "https://boards.greenhouse.io/carbon",
+          "category": "DeFi"
+        },
+        {
+          "name": "Chaincode Labs",
+          "url": "https://boards.greenhouse.io/chaincodelabs",
+          "category": "AI"
+        },
+        {
+          "name": "cLabs (Celo)",
+          "url": "https://boards.greenhouse.io/cio",
+          "category": "Infra"
+        },
+        {
+          "name": "Cobo",
+          "url": "https://boards.greenhouse.io/cobo",
+          "category": "Infra"
+        },
+        {
+          "name": "Coinme",
+          "url": "https://boards.greenhouse.io/coinme",
+          "category": "Infra"
+        },
+        {
+          "name": "D3",
+          "url": "https://boards.greenhouse.io/d3",
+          "category": "L1"
+        },
+        {
+          "name": "Dfinity (ICP)",
+          "url": "https://boards.greenhouse.io/dfinity",
+          "category": "L1"
+        },
+        {
+          "name": "Digital Currency Group",
+          "url": "https://boards.greenhouse.io/digitalcurrencygroup",
+          "category": "VC"
+        },
+        {
+          "name": "Eclipse",
+          "url": "https://boards.greenhouse.io/eclipse",
+          "category": "L2"
+        },
+        {
+          "name": "FalconX",
+          "url": "https://boards.greenhouse.io/falconx",
+          "category": "Infra"
+        },
+        {
+          "name": "Flipside Crypto",
+          "url": "https://boards.greenhouse.io/flipside",
+          "category": "Analytics"
+        },
+        {
+          "name": "Forta",
+          "url": "https://boards.greenhouse.io/forta",
+          "category": "Infra"
+        },
+        {
+          "name": "Foundry Digital",
+          "url": "https://boards.greenhouse.io/foundry",
+          "category": "Custody"
+        },
+        {
+          "name": "Gauntlet",
+          "url": "https://boards.greenhouse.io/gauntlet",
+          "category": "Infra"
+        },
+        {
+          "name": "Gnosis",
+          "url": "https://boards.greenhouse.io/gnosis",
+          "category": "Infra"
+        },
+        {
+          "name": "GSR Markets",
+          "url": "https://boards.greenhouse.io/gsr",
+          "category": "Infra"
+        },
+        {
+          "name": "Hashflow",
+          "url": "https://boards.greenhouse.io/hashflow",
+          "category": "L1"
+        },
+        {
+          "name": "Immunefi",
+          "url": "https://job-boards.greenhouse.io/immunefi",
+          "category": "Infra"
+        },
+        {
+          "name": "Jump Crypto",
+          "url": "https://boards.greenhouse.io/jumpcrypto",
+          "category": "Infra"
+        },
+        {
+          "name": "Lightning Labs",
+          "url": "https://boards.greenhouse.io/lightninglabs",
+          "category": "Infra"
+        },
+        {
+          "name": "Lumera (LayerZero)",
+          "url": "https://boards.greenhouse.io/lumera",
+          "category": "Bridge"
+        },
+        {
+          "name": "Mento Labs",
+          "url": "https://boards.greenhouse.io/mento",
+          "category": "Infra"
+        },
+        {
+          "name": "Merit Circle",
+          "url": "https://boards.greenhouse.io/merit",
+          "category": "Stablecoin"
+        },
+        {
+          "name": "Mysten Labs (Sui)",
+          "url": "https://boards.greenhouse.io/mystenlabs",
+          "category": "L1"
+        },
+        {
+          "name": "Nansen",
+          "url": "https://job-boards.greenhouse.io/nansen",
+          "category": "Analytics"
+        },
+        {
+          "name": "Near Protocol",
+          "url": "https://boards.greenhouse.io/near",
+          "category": "L1"
+        },
+        {
+          "name": "Nomad Bridge",
+          "url": "https://boards.greenhouse.io/nomad",
+          "category": "Bridge"
+        },
+        {
+          "name": "Parity Technologies",
+          "url": "https://boards.greenhouse.io/parity",
+          "category": "Infra"
+        },
+        {
+          "name": "Protocol Labs",
+          "url": "https://boards.greenhouse.io/protocollabs",
+          "category": "Infra"
+        },
+        {
+          "name": "QuickNode",
+          "url": "https://boards.greenhouse.io/quicknode",
+          "category": "Infra"
+        },
+        {
+          "name": "Robinhood Crypto",
+          "url": "https://boards.greenhouse.io/robinhood",
+          "category": "Infra"
+        },
+        {
+          "name": "Safe (Gnosis Safe)",
+          "url": "https://boards.greenhouse.io/safe",
+          "category": "Infra"
+        },
+        {
+          "name": "Scroll",
+          "url": "https://boards.greenhouse.io/scrolltech",
+          "category": "L2"
+        },
+        {
+          "name": "Solana Foundation",
+          "url": "https://boards.greenhouse.io/solanafoundation",
+          "category": "L1"
+        },
+        {
+          "name": "Sorare",
+          "url": "https://boards.greenhouse.io/sorare",
+          "category": "NFT"
+        },
+        {
+          "name": "Stakefish",
+          "url": "https://boards.greenhouse.io/stakefish",
+          "category": "Infra"
+        },
+        {
+          "name": "Strike",
+          "url": "https://boards.greenhouse.io/strike",
+          "category": "Stablecoin"
+        },
+        {
+          "name": "Superstate",
+          "url": "https://boards.greenhouse.io/superstate",
+          "category": "Stablecoin"
+        },
+        {
+          "name": "The Block",
+          "url": "https://boards.greenhouse.io/theblock",
+          "category": "Infra"
+        },
+        {
+          "name": "The Graph",
+          "url": "https://boards.greenhouse.io/thegraph",
+          "category": "Infra"
+        },
+        {
+          "name": "Thirdweb",
+          "url": "https://boards.greenhouse.io/thirdweb",
+          "category": "Infra"
+        },
+        {
+          "name": "Trail of Bits",
+          "url": "https://boards.greenhouse.io/trailofbits",
+          "category": "AI"
+        },
+        {
+          "name": "Uniswap Labs",
+          "url": "https://boards.greenhouse.io/uniswaplabs",
+          "category": "DeFi"
+        },
+        {
+          "name": "Upbit (Dunamu)",
+          "url": "https://boards.greenhouse.io/dunamu",
+          "category": "CEX"
+        },
+        {
+          "name": "Web3 Foundation (Polkadot)",
+          "url": "https://boards.greenhouse.io/web3foundation",
+          "category": "Infra"
+        },
+        {
+          "name": "Wintermute",
+          "url": "https://boards.greenhouse.io/wintermute",
+          "category": "Infra"
+        },
+        {
+          "name": "Worldcoin / Tools for Humanity",
+          "url": "https://job-boards.greenhouse.io/worldcoinorg",
+          "category": "Infra"
+        },
+        {
+          "name": "Zapper",
+          "url": "https://boards.greenhouse.io/zapper",
+          "category": "Wallet"
+        },
+        {
+          "name": "Zerion",
+          "url": "https://boards.greenhouse.io/zerion",
+          "category": "Wallet"
+        },
+        {
+          "name": "1inch",
+          "url": "https://jobs.lever.co/1inch",
+          "category": "DeFi"
+        },
+        {
+          "name": "3Jane Lending",
+          "url": "https://jobs.lever.co/3jane",
+          "category": "DeFi"
+        },
+        {
+          "name": "Aave / Aave Labs",
+          "url": "https://jobs.lever.co/aavelabs",
+          "category": "DeFi"
+        },
+        {
+          "name": "Airtm",
+          "url": "https://jobs.lever.co/airtm",
+          "category": "AI"
+        },
+        {
+          "name": "Allora",
+          "url": "https://jobs.lever.co/allora-labs",
+          "category": "Infra"
+        },
+        {
+          "name": "Anzen",
+          "url": "https://jobs.lever.co/anzen",
+          "category": "Infra"
+        },
+        {
+          "name": "Arbitrum OpCo",
+          "url": "https://jobs.lever.co/arbitrum-opco",
+          "category": "L2"
+        },
+        {
+          "name": "Cere Network",
+          "url": "https://jobs.lever.co/cere-network",
+          "category": "Infra"
+        },
+        {
+          "name": "CoinGecko",
+          "url": "https://jobs.lever.co/coingecko",
+          "category": "Infra"
+        },
+        {
+          "name": "CoinMarketCap",
+          "url": "https://jobs.lever.co/coinmarketcap",
+          "category": "Infra"
+        },
+        {
+          "name": "CoinsPaid",
+          "url": "https://jobs.lever.co/coinspaid",
+          "category": "AI"
+        },
+        {
+          "name": "Connext",
+          "url": "https://jobs.lever.co/connext-network",
+          "category": "Bridge"
+        },
+        {
+          "name": "Flipster",
+          "url": "https://jobs.lever.co/flipster",
+          "category": "CEX"
+        },
+        {
+          "name": "fun.xyz",
+          "url": "https://jobs.lever.co/funxyz",
+          "category": "Infra"
+        },
+        {
+          "name": "Gitcoin",
+          "url": "https://jobs.lever.co/gitcoin",
+          "category": "Infra"
+        },
+        {
+          "name": "Goldfinch",
+          "url": "https://jobs.lever.co/goldfinch",
+          "category": "DeFi"
+        },
+        {
+          "name": "Horizen Labs",
+          "url": "https://jobs.lever.co/horizenlabs",
+          "category": "DeFi"
+        },
+        {
+          "name": "IOG / Cardano",
+          "url": "https://jobs.lever.co/iohk",
+          "category": "L1"
+        },
+        {
+          "name": "IOTA Foundation",
+          "url": "https://jobs.lever.co/iota",
+          "category": "L1"
+        },
+        {
+          "name": "Iron Fish",
+          "url": "https://jobs.lever.co/ironfish",
+          "category": "Infra"
+        },
+        {
+          "name": "KyberSwap / KyberNetwork",
+          "url": "https://jobs.lever.co/kybernetwork",
+          "category": "DeFi"
+        },
+        {
+          "name": "Loopring",
+          "url": "https://jobs.lever.co/loopring",
+          "category": "DeFi"
+        },
+        {
+          "name": "Maya Protocol",
+          "url": "https://jobs.lever.co/maya",
+          "category": "DeFi"
+        },
+        {
+          "name": "MultiversX",
+          "url": "https://jobs.lever.co/multiversx",
+          "category": "Infra"
+        },
+        {
+          "name": "Nibiru Chain",
+          "url": "https://jobs.lever.co/nibiru",
+          "category": "AI"
+        },
+        {
+          "name": "O1 Labs (Mina)",
+          "url": "https://jobs.lever.co/o1labs",
+          "category": "Infra"
+        },
+        {
+          "name": "Offchain Labs (Arbitrum)",
+          "url": "https://jobs.lever.co/offchainlabs",
+          "category": "AI"
+        },
+        {
+          "name": "Rocket Pool",
+          "url": "https://jobs.lever.co/rocketpool",
+          "category": "DeFi"
+        },
+        {
+          "name": "Sei Labs",
+          "url": "https://jobs.lever.co/SeiLabs",
+          "category": "L1"
+        },
+        {
+          "name": "Silo Finance",
+          "url": "https://jobs.lever.co/silofinance",
+          "category": "DeFi"
+        },
+        {
+          "name": "Sky / MakerDAO",
+          "url": "https://jobs.lever.co/sky",
+          "category": "Stablecoin"
+        },
+        {
+          "name": "Sommelier Finance",
+          "url": "https://jobs.lever.co/sommelier",
+          "category": "DeFi"
+        },
+        {
+          "name": "StakeWise",
+          "url": "https://jobs.lever.co/stakewise",
+          "category": "DeFi"
+        },
+        {
+          "name": "Superfluid",
+          "url": "https://jobs.lever.co/superfluid",
+          "category": "DeFi"
+        },
+        {
+          "name": "Swell Network",
+          "url": "https://jobs.lever.co/swellnetwork",
+          "category": "DeFi"
+        },
+        {
+          "name": "The Sandbox",
+          "url": "https://jobs.lever.co/thesandbox",
+          "category": "Gaming"
+        },
+        {
+          "name": "THORChain",
+          "url": "https://jobs.lever.co/thorchain",
+          "category": "AI"
+        },
+        {
+          "name": "Treasure DAO",
+          "url": "https://jobs.lever.co/treasuredao",
+          "category": "NFT"
+        },
+        {
+          "name": "Tron",
+          "url": "https://jobs.lever.co/tron",
+          "category": "L1"
+        },
+        {
+          "name": "Unstoppable Domains",
+          "url": "https://jobs.lever.co/unstoppabledomains",
+          "category": "Infra"
+        },
+        {
+          "name": "Valory",
+          "url": "https://jobs.lever.co/valory",
+          "category": "Infra"
+        },
+        {
+          "name": "XDC Network",
+          "url": "https://jobs.lever.co/xdcnetwork",
+          "category": "Infra"
+        },
+        {
+          "name": "Yearn Finance",
+          "url": "https://jobs.lever.co/yearnfinance",
+          "category": "DeFi"
         }
       ]
     },
