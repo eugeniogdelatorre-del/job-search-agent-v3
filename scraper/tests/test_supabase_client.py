@@ -75,7 +75,7 @@ def test_update_success_resets():
 
 
 def test_update_failure_increments():
-    """On failure, consecutive_failures is incremented; suspended stays False below 5."""
+    """On failure, consecutive_failures is incremented; suspended stays False below threshold."""
     existing = {"consecutive_failures": 2, "suspended": False}
     client = _make_select_client(existing)
 
@@ -89,9 +89,9 @@ def test_update_failure_increments():
     assert row["source_name"] == "src_y"
 
 
-def test_update_5th_failure_suspends():
-    """On the 5th consecutive failure, suspended is set to True."""
-    existing = {"consecutive_failures": 4, "suspended": False}
+def test_update_below_threshold_does_not_suspend():
+    """5th and 6th consecutive failures stay un-suspended (threshold is 7)."""
+    existing = {"consecutive_failures": 5, "suspended": False}
     client = _make_select_client(existing)
 
     update_source_state(client, "src_z", success=False)
@@ -99,7 +99,21 @@ def test_update_5th_failure_suspends():
     upsert_call = client.table.return_value.upsert.call_args
     assert upsert_call is not None, "upsert was never called"
     row = upsert_call[0][0]
-    assert row["consecutive_failures"] == 5
+    assert row["consecutive_failures"] == 6
+    assert row["suspended"] is False
+
+
+def test_update_7th_failure_suspends():
+    """On the 7th consecutive failure (= one full week of daily scrapes), suspended is set to True."""
+    existing = {"consecutive_failures": 6, "suspended": False}
+    client = _make_select_client(existing)
+
+    update_source_state(client, "src_z", success=False)
+
+    upsert_call = client.table.return_value.upsert.call_args
+    assert upsert_call is not None, "upsert was never called"
+    row = upsert_call[0][0]
+    assert row["consecutive_failures"] == 7
     assert row["suspended"] is True
     assert row["source_name"] == "src_z"
 

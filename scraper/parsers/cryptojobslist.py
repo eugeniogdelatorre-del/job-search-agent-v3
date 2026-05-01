@@ -109,13 +109,36 @@ def _job_from_raw(j: dict, source_url: str, source_name: str) -> dict | None:
     }
 
 
+_HTML_FALLBACK_URL = "https://cryptojobslist.com/"
+
+
 def _parse_json_feed(session: requests.Session, source: dict) -> list[dict]:
     url = source["url"]
     resp = session.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
+    # Cryptojobslist started returning 403 on the JSON feed for non-browser
+    # User-Agents. Fall back to scraping the homepage's __NEXT_DATA__ blob
+    # rather than failing the whole source.
+    if resp.status_code == 403:
+        fallback_source = {
+            **source,
+            "url": _HTML_FALLBACK_URL,
+            "name": source.get("name") or "CryptoJobsList",
+        }
+        return _parse_html(session, fallback_source)
     if resp.status_code != 200:
         raise RuntimeError(f"cryptojobslist JSON feed {resp.status_code} for {url}")
 
-    data = resp.json()
+    try:
+        data = resp.json()
+    except ValueError:
+        # Some 200 responses are HTML challenge pages — try the HTML fallback
+        # before giving up entirely.
+        fallback_source = {
+            **source,
+            "url": _HTML_FALLBACK_URL,
+            "name": source.get("name") or "CryptoJobsList",
+        }
+        return _parse_html(session, fallback_source)
 
     if isinstance(data, list):
         jobs_raw = data
