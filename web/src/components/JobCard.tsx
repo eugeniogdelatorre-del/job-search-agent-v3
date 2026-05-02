@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { TagPill } from '@/components/TagPill'
 import { MatchBadge } from '@/components/MatchBadge'
 import { SaveToTrackerButton } from '@/components/SaveToTrackerButton'
+import { ScoreBreakdownPanel } from '@/components/ScoreBreakdownPanel'
 import { formatRelativeDate, formatSalary } from '@/lib/format'
 import type { JobWithScore } from '@/types/db'
 
@@ -42,6 +43,10 @@ export function JobCard({
   const [hovered,  setHovered]  = useState(false)
   const [applied,  setApplied]  = useState(false)
   const [applying, setApplying] = useState(false)
+  // Inline-expand toggle. Separate from the parent's `onFocus` flow (which
+  // navigates to a single-card focused view) so users can scan dim bars
+  // without losing grid context — useful during triage.
+  const [expanded, setExpanded] = useState(false)
 
   const score      = job.job_scores?.[0]
   const salary     = formatSalary(job.salary_min_usd, job.salary_max_usd)
@@ -165,9 +170,27 @@ export function JobCard({
 
       {/* Row 5 — bottom bar */}
       <div className="flex items-center justify-between gap-2 mt-auto pt-1">
-        <span className="font-mono text-[10px]" style={{ color: '#3A4460' }}>
-          {formatRelativeDate(job.first_seen_at)} · via {job.source}
-        </span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-mono text-[10px]" style={{ color: '#3A4460' }}>
+            {formatRelativeDate(job.first_seen_at)} · via {job.source}
+          </span>
+          {score && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}
+              className="font-mono text-[10px] rounded px-1.5 py-0.5 transition-colors"
+              style={{
+                background: expanded ? 'rgba(0,212,255,0.10)' : 'transparent',
+                border: '1px solid #252D40',
+                color: expanded ? '#00D4FF' : '#6B7A99',
+              }}
+              aria-expanded={expanded}
+              aria-label={expanded ? 'Hide score breakdown' : 'Show score breakdown'}
+            >
+              {expanded ? '▴ hide' : '▾ details'}
+            </button>
+          )}
+        </div>
         <div
           className="flex items-center gap-1"
           onClick={(e) => e.stopPropagation()}
@@ -204,6 +227,14 @@ export function JobCard({
           )}
         </div>
       </div>
+
+      {/* Inline score breakdown — only when toggled. stopPropagation on the
+          wrapper so clicks inside don't trip the card-level focus handler. */}
+      {expanded && score && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <ScoreBreakdownPanel score={score} />
+        </div>
+      )}
     </div>
   )
 }

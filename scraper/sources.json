@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "version": "2.2.0",
-    "last_updated": "2026-04-25",
-    "total_sources": 131,
+    "version": "2.4.0",
+    "last_updated": "2026-05-02",
+    "total_sources": 142,
     "groups": 6,
     "schedule_note": "Each group runs once daily at its designated UTC hour to stay within free tier limits",
     "cjl_boost_companies": [
@@ -102,7 +102,8 @@
         {"name": "Matter Labs (zkSync)", "url": "https://jobs.lever.co/matterlabs", "category": "L2"},
         {"name": "Aztec", "url": "https://boards.eu.greenhouse.io/aztec", "category": "L2"},
         {"name": "Alchemy", "url": "https://jobs.lever.co/alchemy", "category": "Infra"},
-        {"name": "CertiK", "url": "https://jobs.lever.co/certik", "category": "Security"}
+        {"name": "CertiK", "url": "https://jobs.lever.co/certik", "category": "Security"},
+        {"name": "The Graph", "url": "https://thegraph.com/jobs", "category": "Infra"}
       ]
     },
     "group_4": {
@@ -123,7 +124,17 @@
         {"name": "TokenJobs", "url": "https://www.tokenjobs.io/", "category": "Board"},
         {"name": "MyWeb3Jobs", "url": "https://myweb3jobs.com/", "category": "Board"},
         {"name": "Blockchain Association", "url": "https://jobs.theblockchainassociation.org/", "category": "Board"},
-        {"name": "Hirechain", "url": "https://share.hirechain.io/job-board/le5rgc1a70", "category": "VC_Board"}
+        {"name": "Hirechain", "url": "https://share.hirechain.io/job-board/le5rgc1a70", "category": "VC_Board"},
+        {"name": "CryptoJobs", "url": "https://cryptojobs.com/jobs", "category": "Board"},
+        {"name": "Remote3", "url": "https://remote3.co/jobs", "category": "Remote_Board"},
+        {"name": "crypto.jobs", "url": "https://crypto.jobs/", "category": "Board"},
+        {"name": "Bankless Job Board", "url": "https://bankless.cc/jobs", "category": "Board"},
+        {"name": "ETHGlobal Jobs", "url": "https://ethglobal.com/jobs", "category": "Board"},
+        {"name": "LaborX", "url": "https://laborx.com/vacancies", "category": "Board"},
+        {"name": "Hashtag Web3", "url": "https://hashtagweb3.com/jobs", "category": "Board"},
+        {"name": "Blockew", "url": "https://blockew.com/jobs/", "category": "Board"},
+        {"name": "Calyptus", "url": "https://www.calyptus.co/jobs", "category": "Board"},
+        {"name": "BitcoinerJobs", "url": "https://bitcoinerjobs.com/", "category": "Board"}
       ]
     },
     "group_5": {

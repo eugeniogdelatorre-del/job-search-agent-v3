@@ -53,7 +53,15 @@ Update this file quarterly with real numbers as they stabilize.
 ## Knobs when/if costs climb
 
 - **Raise the warm threshold** in `scraper/cv_score.py` (currently 60
-  rule score). Going to 70 cuts CV-scored volume roughly in half.
+  rule score, also mirrored in `classify.CLASSIFY_MIN_SCORE`). Going
+  to 70 cuts CV-scored volume roughly in half. Keep the two constants
+  in sync — `classify.py` only classifies jobs at or above the warm
+  threshold, so jobs below it never reach cv_score and never need
+  classification.
+- **Shorten the cv_score age window.** `cv_score.MAX_JOB_AGE_DAYS`
+  (default 15) skips jobs whose `first_seen_at` is older. Drop it
+  further to cut backlog spend; raise it if you want to score older
+  postings that are still active.
 - **Shrink description truncation** in prompts (§4.1 uses 2000, §4.2
   uses 3000). Trim to reduce input tokens at a quality cost.
 - **Drop junk sources**. Aggregator tier 1 sources often produce

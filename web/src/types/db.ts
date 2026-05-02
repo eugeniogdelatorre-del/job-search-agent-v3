@@ -147,6 +147,9 @@ export type ApplicationStatus =
   | 'interview'
   | 'offer'
   | 'rejected'
+  // 'stale' is set by scraper/stale_apps.py when an Applied card sits with
+  // no status change for 30 days. User-draggable like any other column.
+  | 'stale'
 
 export const APPLICATION_STATUSES: ApplicationStatus[] = [
   'saved',
@@ -154,6 +157,7 @@ export const APPLICATION_STATUSES: ApplicationStatus[] = [
   'interview',
   'offer',
   'rejected',
+  'stale',
 ]
 
 export type Application = {

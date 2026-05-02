@@ -43,8 +43,7 @@ See [`JOB_SEARCH_AGENT_V3_PLAN.md`](JOB_SEARCH_AGENT_V3_PLAN.md) — the spec th
 | Workflow | Cron (UTC) | Purpose |
 |---|---|---|
 | `scrape.yml` | `0 */4 * * *` | Fetch + parse + dedup + rule-score all sources (matrix: group 1 + 2) |
-| `classify.yml` | `0 6 * * *` | Batch-classify new jobs (function / vertical / seniority / remote / salary) |
-| `cv_score.yml` | `0 7 * * *` | Batch-score every warm job against the active CV |
+| `ai.yml` | `0 6 * * *` | Single-job AI pipeline — classify warm jobs, then cv_score against the active CV |
 | `weekly_summary.yml` | `0 22 * * 0` | Sun 19:00 ART — top 10 matches by email |
 
 Data retention: 60 days on jobs. Applications carry snapshot fields and survive the sweep.

@@ -28,6 +28,8 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 @runtime_checkable
@@ -50,6 +52,35 @@ USER_AGENT = (
 )
 
 _SEC_CH_UA = '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"'
+
+
+def _retrying_adapter() -> HTTPAdapter:
+    """Adapter that retries transient errors with exponential backoff.
+
+    A single 502/503 from Greenhouse or a brief 429 was previously enough to
+    mark a source failed for the run and bump consecutive_failures toward
+    suspension. Retrying 3× with 0.5 → 1 → 2 second backoff turns most
+    flaps into invisible recoveries while staying under the per-source
+    REQUEST_TIMEOUT_SECONDS budget.
+
+    We retry on idempotent methods only (GET, HEAD, OPTIONS) to be safe — no
+    parser issues mutating requests today, but if one ever does we don't
+    want the adapter silently double-submitting.
+    """
+    retry = Retry(
+        total=3,
+        backoff_factor=0.5,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset(["GET", "HEAD", "OPTIONS"]),
+        raise_on_status=False,
+    )
+    return HTTPAdapter(max_retries=retry)
+
+
+def _mount_retries(s: requests.Session) -> None:
+    adapter = _retrying_adapter()
+    s.mount("http://", adapter)
+    s.mount("https://", adapter)
 
 
 def make_session() -> requests.Session:
@@ -75,6 +106,7 @@ def make_session() -> requests.Session:
         "Sec-Fetch-User": "?1",
         "Upgrade-Insecure-Requests": "1",
     })
+    _mount_retries(s)
     return s
 
 
@@ -97,4 +129,5 @@ def make_api_session() -> requests.Session:
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
     })
+    _mount_retries(s)
     return s

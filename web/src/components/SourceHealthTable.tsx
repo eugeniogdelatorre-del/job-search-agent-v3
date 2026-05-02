@@ -1,5 +1,7 @@
 ﻿// SourceHealthTable — dark terminal table. Status dot: healthy=green,
-// failed=red. Failures at top, sorted by recency within groups.
+// failed=red. Sorted by today's job count (desc); failures float up on
+// ties so dead sources stay visible at the bottom-of-rank instead of
+// disappearing into a sea of zeroes.
 
 import { formatRelativeDate } from '@/lib/format'
 
@@ -12,15 +14,43 @@ type HealthRow = {
   duration_ms:   number | null
 }
 
+type DisplayRow = HealthRow & { jobs_today: number }
+
+// "Today" = current UTC day. Cron runs are scheduled in UTC, so this
+// matches when scrapes actually fire and avoids "midnight resets in
+// the user's timezone but the scraper hasn't run yet" weirdness.
+function todayUtcStartIso(): string {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+}
+
 export function SourceHealthTable({ rows }: { rows: HealthRow[] }) {
+  const todayStart = todayUtcStartIso()
+
+  // Latest run per source — drives Status / Latency / Last run / Error.
+  // Rows arrive ordered by run_at desc, so first-seen-wins picks latest.
   const latest = new Map<string, HealthRow>()
   for (const r of rows) {
     if (!latest.has(r.source)) latest.set(r.source, r)
   }
-  const list = Array.from(latest.values()).sort((a, b) => {
-    if (a.success !== b.success) return a.success ? 1 : -1
-    return b.run_at.localeCompare(a.run_at)
-  })
+
+  // Today's total per source — sum jobs_found across every run logged
+  // since UTC midnight. A source with two scrapes today (e.g. matrix
+  // retry) gets both counted, which is what we want for "produced X
+  // jobs today" intuition.
+  const jobsToday = new Map<string, number>()
+  for (const r of rows) {
+    if (r.run_at < todayStart) continue
+    jobsToday.set(r.source, (jobsToday.get(r.source) ?? 0) + (r.jobs_found || 0))
+  }
+
+  const list: DisplayRow[] = Array.from(latest.values())
+    .map((r) => ({ ...r, jobs_today: jobsToday.get(r.source) ?? 0 }))
+    .sort((a, b) => {
+      if (b.jobs_today !== a.jobs_today) return b.jobs_today - a.jobs_today
+      if (a.success !== b.success) return a.success ? 1 : -1
+      return b.run_at.localeCompare(a.run_at)
+    })
 
   const failing = list.filter((r) => !r.success).length
 
@@ -88,7 +118,7 @@ export function SourceHealthTable({ rows }: { rows: HealthRow[] }) {
                   </div>
                 </td>
                 <td className="px-4 py-2.5 font-mono text-[11px] tabular-nums" style={{ color: '#E8ECF0' }}>
-                  {r.jobs_found}
+                  {r.jobs_today}
                 </td>
                 <td className="px-4 py-2.5 font-mono text-[11px] tabular-nums" style={{ color: '#6B7A99' }}>
                   {r.duration_ms ? `${(r.duration_ms / 1000).toFixed(1)}s` : '—'}

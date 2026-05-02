@@ -5,7 +5,10 @@
 //   1. If resume_id is provided → activate that CV (same logic as
 //      /api/cv/activate; deactivate others first to respect the unique
 //      partial index, then flip the target active).
-//   2. Dispatch the cv_score.yml workflow via GitHub workflow_dispatch.
+//   2. Dispatch the ai.yml workflow via GitHub workflow_dispatch.
+//      ai.yml is the merged classify→cv_score pipeline; we dispatch the
+//      whole thing so a re-score after CV activation also picks up any
+//      not-yet-classified warm jobs in the same run.
 //      Requires GITHUB_PAT env var with actions:write (workflow) scope.
 //
 // Returns 204-equivalent JSON on success:
@@ -25,7 +28,7 @@ export const dynamic = 'force-dynamic'
 
 const GH_OWNER    = 'eugeniogdelatorre-del'
 const GH_REPO     = 'job-search-agent-v3'
-const GH_WORKFLOW = 'cv_score.yml'
+const GH_WORKFLOW = 'ai.yml'
 const GH_REF      = 'main'
 
 export async function POST(req: NextRequest) {
@@ -86,7 +89,7 @@ export async function POST(req: NextRequest) {
     activated = true
   }
 
-  // ── Step 2: dispatch cv_score.yml via GitHub API ──────────────────────────
+  // ── Step 2: dispatch ai.yml via GitHub API ────────────────────────────────
   const pat = process.env.GITHUB_PAT
   if (!pat) {
     return NextResponse.json(

@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>job-agent — Today</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Syne:wght@600;700;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg-base: #0A0C10;
+    --bg-card: #0F1117;
+    --bg-elevated: #141820;
+    --border: #1E2330;
+    --border-mid: #252D40;
+    --accent-cyan: #00D4FF;
+    --accent-cyan-dim: rgba(0,212,255,0.12);
+    --accent-cyan-glow: rgba(0,212,255,0.25);
+    --accent-amber: #F5A623;
+    --accent-amber-dim: rgba(245,166,35,0.12);
+    --text-primary: #E8ECF0;
+    --text-muted: #6B7A99;
+    --text-mid: #A0AABB;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-heading: 'Syne', sans-serif;
+    --font-body: 'Inter', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--bg-base); color: var(--text-primary); font-family: var(--font-body); }
+  body { min-height: 100vh; }
+  
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-base); }
+  ::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  /* Shimmer animation */
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .skeleton {
+    background: linear-gradient(90deg, #1E2330 25%, #252D40 50%, #1E2330 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s infinite;
+    border-radius: 4px;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 128px 128px;
+  }
+
+  /* Grid lines background texture */
+  .page-bg {
+    background-color: var(--bg-base);
+    background-image:
+      linear-gradient(rgba(30,35,48,0.4) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30,35,48,0.4) 1px, transparent 1px);
+    background-size: 40px 40px;
+    min-height: 100vh;
+  }
+
+  /* Scrollable container below sticky nav */
+  .main-scroll { padding-top: 56px; }
+  
+  input, select, button { font-family: inherit; }
+  button { cursor: pointer; }
+</style>
+</head>
+<body class="page-bg">
+<div id="root"></div>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ─── DATA ────────────────────────────────────────────────────────────────────
+const JOBS = [
+  {
+    id: 1,
+    title: "Head of Growth & Partnerships",
+    company: "Consensys",
+    location: "Remote · Global",
+    match: 91,
+    ruleScore: 78,
+    func: "Marketing",
+    vertical: "Infrastructure",
+    tags: ["Marketing", "DeFi", "Remote"],
+    salary: "$180k–$240k",
+    source: "greenhouse",
+    posted: "2h ago",
+    saved: false,
+  },
+  {
+    id: 2,
+    title: "Protocol Growth Lead",
+    company: "Uniswap Labs",
+    location: "New York, NY",
+    match: 87,
+    ruleScore: 71,
+    func: "Growth",
+    vertical: "DeFi",
+    tags: ["Growth", "DeFi", "Protocol"],
+    salary: "$160k–$210k",
+    source: "lever",
+    posted: "4h ago",
+    saved: true,
+  },
+  {
+    id: 3,
+    title: "Token Economics Researcher",
+    company: "a16z crypto",
+    location: "San Francisco, CA",
+    match: 74,
+    ruleScore: 65,
+    func: "Research",
+    vertical: "Venture",
+    tags: ["Research", "Protocol", "L1"],
+    salary: "$200k–$280k",
+    source: "ashby",
+    posted: "6h ago",
+    saved: false,
+  },
+  {
+    id: 4,
+    title: "Senior DeFi Product Manager",
+    company: "Coinbase",
+    location: "Remote · US",
+    match: null,
+    ruleScore: 55,
+    func: "Product",
+    vertical: "Exchange",
+    tags: ["Product", "DeFi", "Remote"],
+    salary: "$170k–$230k",
+    source: "greenhouse",
+    posted: "9h ago",
+    saved: false,
+  },
+  {
+    id: 5,
+    title: "Ecosystem Growth Manager",
+    company: "Solana Foundation",
+    location: "Remote · Global",
+    match: 68,
+    ruleScore: 48,
+    func: "Growth",
+    vertical: "L1",
+    tags: ["Growth", "L1", "Remote"],
+    salary: "$140k–$190k",
+    source: "lever",
+    posted: "11h ago",
+    saved: false,
+  },
+  {
+    id: 6,
+    title: "BD & Institutional Sales Lead",
+    company: "Fireblocks",
+    location: "London, UK",
+    match: null,
+    ruleScore: 42,
+    func: "Business Development",
+    vertical: "Infrastructure",
+    tags: ["BD", "Infrastructure", "Hybrid"],
+    salary: "£130k–£170k",
+    source: "workable",
+    posted: "14h ago",
+    saved: true,
+  },
+  {
+    id: 7,
+    title: "Marketing Strategy Director",
+    company: "Chainlink Labs",
+    location: "Remote · Global",
+    match: 82,
+    ruleScore: 73,
+    func: "Marketing",
+    vertical: "Oracle",
+    tags: ["Marketing", "Oracle", "Remote"],
+    salary: "$160k–$220k",
+    source: "greenhouse",
+    posted: "1d ago",
+    saved: false,
+  },
+  {
+    id: 8,
+    title: "Crypto Fund Operations Lead",
+    company: "Paradigm",
+    location: "San Francisco, CA",
+    match: 59,
+    ruleScore: 61,
+    func: "Operations",
+    vertical: "Venture",
+    tags: ["Operations", "Venture", "Onsite"],
+    salary: "$150k–$200k",
+    source: "ashby",
+    posted: "1d ago",
+    saved: false,
+  },
+  {
+    id: 9,
+    title: "zkEVM Community Lead",
+    company: "Polygon Labs",
+    location: "Remote · EMEA",
+    match: 77,
+    ruleScore: 67,
+    func: "Community",
+    vertical: "L2",
+    tags: ["Community", "L2", "Remote"],
+    salary: "$100k–$140k",
+    source: "lever",
+    posted: "1d ago",
+    saved: false,
+  },
+];
+
+// ─── TAG COLORS ───────────────────────────────────────────────────────────────
+const TAG_COLORS = {
+  "Marketing":         { bg: "rgba(139,92,246,0.15)", border: "rgba(139,92,246,0.35)", text: "#A78BFA" },
+  "DeFi":              { bg: "rgba(0,212,255,0.10)",  border: "rgba(0,212,255,0.30)", text: "#67E8F9" },
+  "Remote":            { bg: "rgba(34,197,94,0.10)",  border: "rgba(34,197,94,0.30)", text: "#4ADE80" },
+  "Growth":            { bg: "rgba(251,146,60,0.10)", border: "rgba(251,146,60,0.30)", text: "#FB923C" },
+  "Protocol":          { bg: "rgba(0,212,255,0.10)",  border: "rgba(0,212,255,0.30)", text: "#38BDF8" },
+  "L1":                { bg: "rgba(245,166,35,0.10)", border: "rgba(245,166,35,0.30)", text: "#FCD34D" },
+  "L2":                { bg: "rgba(168,85,247,0.10)", border: "rgba(168,85,247,0.30)", text: "#C084FC" },
+  "Research":          { bg: "rgba(99,102,241,0.10)", border: "rgba(99,102,241,0.30)", text: "#818CF8" },
+  "Product":           { bg: "rgba(20,184,166,0.10)", border: "rgba(20,184,166,0.30)", text: "#2DD4BF" },
+  "BD":                { bg: "rgba(239,68,68,0.10)",  border: "rgba(239,68,68,0.30)", text: "#F87171" },
+  "Infrastructure":    { bg: "rgba(100,116,139,0.15)", border: "rgba(100,116,139,0.35)", text: "#94A3B8" },
+  "Community":         { bg: "rgba(236,72,153,0.10)", border: "rgba(236,72,153,0.30)", text: "#F472B6" },
+  "Oracle":            { bg: "rgba(245,166,35,0.10)", border: "rgba(245,166,35,0.30)", text: "#FBBF24" },
+  "Venture":           { bg: "rgba(139,92,246,0.10)", border: "rgba(139,92,246,0.30)", text: "#A78BFA" },
+  "Operations":        { bg: "rgba(100,116,139,0.15)", border: "rgba(100,116,139,0.35)", text: "#94A3B8" },
+  "Exchange":          { bg: "rgba(0,212,255,0.10)",  border: "rgba(0,212,255,0.30)", text: "#22D3EE" },
+  "Hybrid":            { bg: "rgba(34,197,94,0.10)",  border: "rgba(34,197,94,0.30)", text: "#86EFAC" },
+  "Onsite":            { bg: "rgba(239,68,68,0.10)",  border: "rgba(239,68,68,0.30)", text: "#FCA5A5" },
+};
+
+function tagStyle(tag) {
+  return TAG_COLORS[tag] || { bg: "rgba(107,122,153,0.12)", border: "rgba(107,122,153,0.3)", text: "#6B7A99" };
+}
+
+// ─── NAV ─────────────────────────────────────────────────────────────────────
+const NAV_LINKS = ["Today", "Week", "Archive", "Apply", "CV", "Tune", "Settings"];
+
+function HexIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{flexShrink:0}}>
+      <path d="M9 1.5L16 5.25V12.75L9 16.5L2 12.75V5.25L9 1.5Z"
+        stroke="var(--accent-cyan)" strokeWidth="1.5" fill="rgba(0,212,255,0.08)" strokeLinejoin="round"/>
+      <circle cx="9" cy="9" r="2" fill="var(--accent-cyan)" opacity="0.7"/>
+    </svg>
+  );
+}
+
+function NavBar({ activePage, setActivePage }) {
+  return (
+    <nav style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+      background: 'rgba(10,12,16,0.95)',
+      borderBottom: '1px solid var(--border)',
+      backdropFilter: 'blur(12px)',
+      WebkitBackdropFilter: 'blur(12px)',
+      height: 56,
+      display: 'flex', alignItems: 'center',
+      padding: '0 24px',
+      gap: 32,
+    }}>
+      {/* Logo */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <HexIcon />
+        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+          job-agent
+        </span>
+      </div>
+
+      {/* Center Nav */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, justifyContent: 'center' }}>
+        {NAV_LINKS.map(link => {
+          const active = activePage === link;
+          return (
+            <button key={link} onClick={() => setActivePage(link)} style={{
+              background: 'none', border: 'none',
+              padding: '0 14px', height: 56,
+              fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 500,
+              color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+              borderBottom: active ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+              cursor: 'pointer', transition: 'color 0.15s',
+              letterSpacing: '0.01em',
+            }}
+            onMouseEnter={e => { if (!active) e.target.style.color = 'var(--text-mid)'; }}
+            onMouseLeave={e => { if (!active) e.target.style.color = 'var(--text-muted)'; }}>
+              {link}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Right */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
+          user@gmail.com
+        </span>
+        <button style={{
+          background: 'none', border: '1px solid var(--border-mid)',
+          padding: '5px 12px', borderRadius: 6,
+          fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 500,
+          color: 'var(--text-mid)', cursor: 'pointer',
+          transition: 'border-color 0.15s, color 0.15s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--text-muted)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-mid)'; e.currentTarget.style.color = 'var(--text-mid)'; }}>
+          Sign out
+        </button>
+      </div>
+    </nav>
+  );
+}
+
+// ─── PAGE HEADER ─────────────────────────────────────────────────────────────
+function PageHeader({ jobCount }) {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
+      <div>
+        <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 36, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', lineHeight: 1 }}>
+          Today
+        </h1>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 8, letterSpacing: '0.03em' }}>
+          {dateStr.toLowerCase()} · {jobCount} positions indexed
+        </p>
+      </div>
+      <button style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        background: 'none', border: '1px solid var(--border-mid)',
+        padding: '7px 14px', borderRadius: 6,
+        fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 500,
+        color: 'var(--text-muted)', cursor: 'pointer',
+        transition: 'all 0.15s', marginTop: 4,
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--text-muted)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-mid)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M6 1v7M3 6l3 3 3-3M1 10h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        export
+      </button>
+    </div>
+  );
+}
+
+// ─── FILTER BAR ───────────────────────────────────────────────────────────────
+function FilterBar({ filters, setFilters }) {
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  const inputBase = {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid var(--border)',
+    borderRadius: 6,
+    padding: '7px 10px',
+    fontFamily: 'var(--font-body)',
+    fontSize: 12,
+    color: 'var(--text-primary)',
+    outline: 'none',
+    transition: 'border-color 0.15s, box-shadow 0.15s',
+  };
+
+  const monoInput = {
+    ...inputBase,
+    fontFamily: 'var(--font-mono)',
+    fontSize: 11,
+    width: 110,
+  };
+
+  const selectStyle = {
+    ...inputBase,
+    cursor: 'pointer',
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236B7A99' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 8px center',
+    paddingRight: 24,
+    fontSize: 12,
+  };
+
+  function focusStyle(focused) {
+    return focused ? { borderColor: 'var(--accent-cyan)', boxShadow: '0 0 0 2px rgba(0,212,255,0.15)' } : {};
+  }
+
+  const [focused, setFocused] = useState({});
+
+  return (
+    <div style={{
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border)',
+      borderRadius: 10,
+      padding: '14px 16px',
+      marginBottom: 24,
+      display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
+    }}>
+      {/* Search */}
+      <div style={{ position: 'relative', flexGrow: 1, minWidth: 180 }}>
+        <svg style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+          width="13" height="13" viewBox="0 0 13 13" fill="none">
+          <circle cx="5.5" cy="5.5" r="4.5" stroke="#6B7A99" strokeWidth="1.5"/>
+          <path d="M9.5 9.5L12 12" stroke="#6B7A99" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+        <input
+          type="text"
+          placeholder="Search jobs, companies..."
+          value={filters.search}
+          onChange={e => setFilters(f => ({...f, search: e.target.value}))}
+          onFocus={() => setFocused(f => ({...f, search: true}))}
+          onBlur={() => setFocused(f => ({...f, search: false}))}
+          style={{ ...inputBase, paddingLeft: 30, width: '100%', ...focusStyle(focused.search) }}
+        />
+      </div>
+
+      {/* Dropdowns */}
+      {[
+        { key: 'func', opts: ['Any function', 'Marketing', 'Growth', 'Product', 'Research', 'Business Development', 'Operations', 'Community'] },
+        { key: 'vertical', opts: ['Any vertical', 'DeFi', 'Infrastructure', 'L1', 'L2', 'Venture', 'Oracle', 'Exchange'] },
+        { key: 'seniority', opts: ['Any seniority', 'IC', 'Lead', 'Senior', 'Director', 'VP', 'C-Level'] },
+        { key: 'location', opts: ['Any location', 'Remote', 'San Francisco', 'New York', 'London', 'EMEA'] },
+      ].map(({ key, opts }) => (
+        <select key={key} value={filters[key]}
+          onChange={e => setFilters(f => ({...f, [key]: e.target.value}))}
+          onFocus={() => setFocused(f => ({...f, [key]: true}))}
+          onBlur={() => setFocused(f => ({...f, [key]: false}))}
+          style={{ ...selectStyle, ...focusStyle(focused[key]) }}>
+          {opts.map(o => <option key={o} value={o} style={{background:'#0F1117'}}>{o}</option>)}
+        </select>
+      ))}
+
+      {/* Divider */}
+      <div style={{ width: 1, height: 24, background: 'var(--border)', margin: '0 4px' }}></div>
+
+      {/* Numeric inputs */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>min $</span>
+        <input type="number" placeholder="0" value={filters.minSalary}
+          onChange={e => setFilters(f => ({...f, minSalary: e.target.value}))}
+          onFocus={() => setFocused(f => ({...f, minSalary: true}))}
+          onBlur={() => setFocused(f => ({...f, minSalary: false}))}
+          style={{ ...monoInput, width: 80, ...focusStyle(focused.minSalary) }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>rule ≥</span>
+        <input type="number" placeholder="0" value={filters.minRule}
+          onChange={e => setFilters(f => ({...f, minRule: e.target.value}))}
+          onFocus={() => setFocused(f => ({...f, minRule: true}))}
+          onBlur={() => setFocused(f => ({...f, minRule: false}))}
+          style={{ ...monoInput, width: 64, ...focusStyle(focused.minRule) }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>match ≥</span>
+        <input type="number" placeholder="0" value={filters.minMatch}
+          onChange={e => setFilters(f => ({...f, minMatch: e.target.value}))}
+          onFocus={() => setFocused(f => ({...f, minMatch: true}))}
+          onBlur={() => setFocused(f => ({...f, minMatch: false}))}
+          style={{ ...monoInput, width: 64, ...focusStyle(focused.minMatch) }} />
+      </div>
+
+      {/* Clear */}
+      {(filters.search || filters.func !== 'Any function' || filters.vertical !== 'Any vertical' || filters.minSalary || filters.minRule || filters.minMatch) && (
+        <button onClick={() => setFilters({ search: '', func: 'Any function', vertical: 'Any vertical', seniority: 'Any seniority', location: 'Any location', minSalary: '', minRule: '', minMatch: '' })}
+          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', cursor: 'pointer' }}>
+          clear ×
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── MATCH BADGE ─────────────────────────────────────────────────────────────
+function MatchBadge({ match }) {
+  if (match === null) return (
+    <span style={{
+      fontFamily: 'var(--font-mono)', fontSize: 11, fontStyle: 'italic',
+      color: '#3A4460', background: '#141820',
+      border: '1px solid #1E2330',
+      padding: '2px 8px', borderRadius: 20,
+    }}>—</span>
+  );
+
+  const color = match >= 85 ? 'var(--accent-cyan)' : match >= 70 ? '#67E8F9' : 'var(--text-mid)';
+  const bg = match >= 85 ? 'rgba(0,212,255,0.12)' : match >= 70 ? 'rgba(103,232,249,0.08)' : 'rgba(160,170,187,0.08)';
+  const border = match >= 85 ? 'rgba(0,212,255,0.4)' : match >= 70 ? 'rgba(103,232,249,0.3)' : 'rgba(160,170,187,0.2)';
+
+  return (
+    <span style={{
+      fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600,
+      color, background: bg, border: `1px solid ${border}`,
+      padding: '2px 8px', borderRadius: 20,
+    }}>{match}%</span>
+  );
+}
+
+// ─── RULE BADGE ──────────────────────────────────────────────────────────────
+function RuleBadge({ score }) {
+  const color = score >= 70 ? 'var(--accent-amber)' : score >= 50 ? 'var(--text-mid)' : '#3A4460';
+  const bg = score >= 70 ? 'rgba(245,166,35,0.10)' : score >= 50 ? 'rgba(160,170,187,0.07)' : 'transparent';
+  const border = score >= 70 ? 'rgba(245,166,35,0.3)' : score >= 50 ? 'rgba(160,170,187,0.2)' : 'var(--border)';
+  return (
+    <span style={{
+      fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500,
+      color, background: bg, border: `1px solid ${border}`,
+      padding: '2px 7px', borderRadius: 4,
+    }}>rule: {score}</span>
+  );
+}
+
+// ─── TAG PILL ─────────────────────────────────────────────────────────────────
+function TagPill({ tag }) {
+  const s = tagStyle(tag);
+  return (
+    <span style={{
+      fontFamily: 'var(--font-body)', fontSize: 10, fontWeight: 500,
+      color: s.text, background: s.bg, border: `1px solid ${s.border}`,
+      padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap',
+    }}>{tag}</span>
+  );
+}
+
+// ─── JOB CARD ─────────────────────────────────────────────────────────────────
+function JobCard({ job, accentColor, cardRadius }) {
+  const [hovered, setHovered] = useState(false);
+  const [saved, setSaved] = useState(job.saved);
+  const [applied, setApplied] = useState(false);
+
+  const cardStyle = {
+    background: 'var(--bg-card)',
+    border: `1px solid ${hovered ? `rgba(0,212,255,0.35)` : 'var(--border)'}`,
+    borderRadius: cardRadius || 10,
+    padding: '16px',
+    display: 'flex', flexDirection: 'column', gap: 10,
+    transition: 'border-color 0.18s, box-shadow 0.18s, transform 0.18s',
+    boxShadow: hovered ? '0 0 0 1px rgba(0,212,255,0.1), 0 4px 24px rgba(0,212,255,0.06)' : 'none',
+    transform: hovered ? 'translateY(-1px)' : 'none',
+    cursor: 'default',
+    position: 'relative',
+    overflow: 'hidden',
+  };
+
+  return (
+    <div style={cardStyle}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}>
+
+      {/* Subtle top accent line on hover */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+        background: hovered ? `linear-gradient(90deg, transparent, rgba(0,212,255,0.5), transparent)` : 'transparent',
+        transition: 'background 0.3s',
+      }}></div>
+
+      {/* Row 1: Title + Match */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <h3 style={{
+          fontFamily: 'var(--font-heading)', fontSize: 14, fontWeight: 700,
+          color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1.3,
+          flex: 1, overflow: 'hidden', display: '-webkit-box',
+          WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+        }}>{job.title}</h3>
+        <MatchBadge match={job.match} />
+      </div>
+
+      {/* Row 2: Company · Location */}
+      <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 6, alignItems: 'center' }}>
+        <span style={{ color: 'var(--text-mid)', fontWeight: 500 }}>{job.company}</span>
+        <span style={{ color: 'var(--border-mid)' }}>·</span>
+        <span>{job.location}</span>
+      </div>
+
+      {/* Row 3: Tags + Rule score */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
+        {job.tags.map(t => <TagPill key={t} tag={t} />)}
+        <RuleBadge score={job.ruleScore} />
+      </div>
+
+      {/* Row 4: Salary */}
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#3A4460', letterSpacing: '0.02em' }}>
+        {job.salary}
+      </div>
+
+      {/* Row 5: Bottom bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#3A4460', letterSpacing: '0.02em' }}>
+          {job.posted} · via {job.source}
+        </span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* Bookmark */}
+          <button onClick={() => setSaved(s => !s)} style={{
+            background: 'none', border: 'none', padding: 4, cursor: 'pointer',
+            color: saved ? 'var(--accent-amber)' : 'var(--text-muted)',
+            transition: 'color 0.15s',
+          }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill={saved ? 'currentColor' : 'none'}>
+              <path d="M2.5 1.5h9a.5.5 0 01.5.5v10.5l-5-3-5 3V2a.5.5 0 01.5-.5z"
+                stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          {/* Apply */}
+          <button onClick={() => setApplied(a => !a)} style={{
+            background: applied ? 'rgba(0,212,255,0.15)' : accentColor === 'amber' ? 'rgba(245,166,35,0.9)' : 'var(--accent-cyan)',
+            border: applied ? '1px solid rgba(0,212,255,0.4)' : 'none',
+            borderRadius: 5, padding: '5px 12px',
+            fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+            color: applied ? 'var(--accent-cyan)' : '#000',
+            cursor: 'pointer', letterSpacing: '0.03em',
+            transition: 'transform 0.15s, background 0.15s',
+            transform: hovered && !applied ? 'scale(1.03)' : 'scale(1)',
+          }}>
+            {applied ? 'applied ✓' : 'apply →'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SKELETON CARD ────────────────────────────────────────────────────────────
+function SkeletonCard() {
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <div className="skeleton" style={{ height: 16, width: '65%', borderRadius: 4 }}></div>
+        <div className="skeleton" style={{ height: 20, width: 42, borderRadius: 20 }}></div>
+      </div>
+      <div className="skeleton" style={{ height: 13, width: '45%', borderRadius: 4 }}></div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <div className="skeleton" style={{ height: 20, width: 72, borderRadius: 20 }}></div>
+        <div className="skeleton" style={{ height: 20, width: 56, borderRadius: 20 }}></div>
+        <div className="skeleton" style={{ height: 20, width: 64, borderRadius: 20 }}></div>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+        <div className="skeleton" style={{ height: 11, width: '30%', borderRadius: 4 }}></div>
+        <div className="skeleton" style={{ height: 26, width: 68, borderRadius: 5 }}></div>
+      </div>
+    </div>
+  );
+}
+
+// ─── EMPTY STATE ──────────────────────────────────────────────────────────────
+function EmptyState() {
+  return (
+    <div style={{ gridColumn: '1/-1', padding: '64px 0', textAlign: 'center' }}>
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style={{ margin: '0 auto 16px', display: 'block', opacity: 0.3 }}>
+        <circle cx="20" cy="20" r="18" stroke="#6B7A99" strokeWidth="2"/>
+        <path d="M14 20h12M20 14v12" stroke="#6B7A99" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)' }}>
+        no jobs match your filters
+      </p>
+      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#3A4460', marginTop: 6 }}>
+        try relaxing your criteria
+      </p>
+    </div>
+  );
+}
+
+// ─── STATS ROW ────────────────────────────────────────────────────────────────
+function StatsRow({ jobs }) {
+  const scored = jobs.filter(j => j.match !== null);
+  const avgMatch = scored.length ? Math.round(scored.reduce((a, j) => a + j.match, 0) / scored.length) : 0;
+  const highRule = jobs.filter(j => j.ruleScore >= 70).length;
+
+  const stats = [
+    { label: 'indexed', value: jobs.length },
+    { label: 'scored', value: scored.length },
+    { label: 'avg match', value: scored.length ? `${avgMatch}%` : '—' },
+    { label: 'rule ≥ 70', value: highRule },
+    { label: 'saved', value: jobs.filter(j => j.saved).length },
+  ];
+
+  return (
+    <div style={{ display: 'flex', gap: 0, marginBottom: 24, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-card)' }}>
+      {stats.map((s, i) => (
+        <div key={s.label} style={{
+          flex: 1, padding: '10px 16px', textAlign: 'center',
+          borderRight: i < stats.length - 1 ? '1px solid var(--border)' : 'none',
+        }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+            {s.value}
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 2, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            {s.label}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── APPLY PAGE (Kanban) ──────────────────────────────────────────────────────
+const KANBAN_COLS = [
+  { id: 'saved', label: 'Saved', color: '#6B7A99', jobs: [JOBS[1], JOBS[5]] },
+  { id: 'applied', label: 'Applied', color: 'var(--accent-cyan)', jobs: [JOBS[0]] },
+  { id: 'interview', label: 'Interview', color: '#A78BFA', jobs: [] },
+  { id: 'offer', label: 'Offer', color: '#4ADE80', jobs: [] },
+  { id: 'rejected', label: 'Rejected', color: '#F87171', jobs: [JOBS[4]] },
+];
+
+function KanbanCard({ job }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{
+        background: 'var(--bg-base)', border: `1px solid ${hov ? 'rgba(0,212,255,0.3)' : 'var(--border)'}`,
+        borderRadius: 8, padding: '12px', marginBottom: 8,
+        transition: 'border-color 0.15s, box-shadow 0.15s',
+        boxShadow: hov ? '0 2px 12px rgba(0,212,255,0.06)' : 'none',
+      }}>
+      <div style={{ fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{job.title}</div>
+      <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{job.company} · {job.location}</div>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {job.tags.slice(0, 2).map(t => <TagPill key={t} tag={t} />)}
+        {job.match && <MatchBadge match={job.match} />}
+      </div>
+    </div>
+  );
+}
+
+function ApplyPage() {
+  return (
+    <div style={{ padding: '32px 24px' }}>
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em' }}>Apply</h1>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>pipeline · drag to move stages</p>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+        {KANBAN_COLS.map(col => (
+          <div key={col.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: col.color, flexShrink: 0 }}></div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: 'var(--text-mid)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{col.label}</span>
+              <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 10, color: '#3A4460' }}>{col.jobs.length}</span>
+            </div>
+            {col.jobs.map(j => <KanbanCard key={j.id} job={j} />)}
+            {col.jobs.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '24px 8px', fontFamily: 'var(--font-mono)', fontSize: 10, color: '#3A4460' }}>empty</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── SETTINGS PAGE ────────────────────────────────────────────────────────────
+function SettingsPage() {
+  const chartPoints = [12, 18, 14, 22, 28, 24, 30, 26, 34, 28, 38, 32, 42, 36, 40, 44, 38, 46, 42, 48, 44, 52, 48, 56, 50, 58, 52, 60, 56, 62];
+  const max = Math.max(...chartPoints);
+  const w = 500, h = 120, pad = 10;
+  const pts = chartPoints.map((v, i) => {
+    const x = pad + (i / (chartPoints.length - 1)) * (w - 2 * pad);
+    const y = h - pad - (v / max) * (h - 2 * pad);
+    return `${x},${y}`;
+  }).join(' ');
+  const area = `M${pad},${h - pad} ` + chartPoints.map((v, i) => {
+    const x = pad + (i / (chartPoints.length - 1)) * (w - 2 * pad);
+    const y = h - pad - (v / max) * (h - 2 * pad);
+    return `L${x},${y}`;
+  }).join(' ') + ` L${w - pad},${h - pad} Z`;
+
+  const sources = [
+    { name: 'Greenhouse', status: 'healthy', jobs: 312, latency: '1.2s' },
+    { name: 'Lever', status: 'healthy', jobs: 248, latency: '0.8s' },
+    { name: 'Ashby', status: 'degraded', jobs: 94, latency: '3.4s' },
+    { name: 'Workable', status: 'healthy', jobs: 67, latency: '1.1s' },
+  ];
+
+  const statusColor = { healthy: '#4ADE80', degraded: 'var(--accent-amber)', down: '#F87171' };
+
+  return (
+    <div style={{ padding: '32px 24px', maxWidth: 800 }}>
+      <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', marginBottom: 28 }}>Settings</h1>
+      
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: 20, marginBottom: 16 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.08em' }}>MTD Spend · API calls</div>
+        <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+          <defs>
+            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--accent-cyan)" stopOpacity="0.2"/>
+              <stop offset="100%" stopColor="var(--accent-cyan)" stopOpacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d={area} fill="url(#areaGrad)"/>
+          <polyline points={pts} fill="none" stroke="var(--accent-cyan)" strokeWidth="1.5" strokeLinejoin="round"/>
+        </svg>
+      </div>
+
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Source Health</div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              {['Source', 'Status', 'Jobs today', 'Latency'].map(h => (
+                <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: 10, color: '#3A4460', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sources.map((s, i) => (
+              <tr key={s.name} style={{ borderBottom: i < sources.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                <td style={{ padding: '10px 16px', fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-primary)' }}>{s.name}</td>
+                <td style={{ padding: '10px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor[s.status] }}></div>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: statusColor[s.status] }}>{s.status}</span>
+                  </div>
+                </td>
+                <td style={{ padding: '10px 16px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-mid)' }}>{s.jobs}</td>
+                <td style={{ padding: '10px 16px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>{s.latency}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── TUNE PAGE ────────────────────────────────────────────────────────────────
+const DEFAULT_CONFIG = `{
+  "sources": {
+    "greenhouse": { "enabled": true, "weight": 1.0 },
+    "lever": { "enabled": true, "weight": 0.9 },
+    "ashby": { "enabled": true, "weight": 0.8 },
+    "workable": { "enabled": false, "weight": 0.7 }
+  },
+  "filters": {
+    "min_salary": 120000,
+    "remote_only": false,
+    "exclude_keywords": ["internship", "junior"],
+    "required_keywords": []
+  },
+  "scoring": {
+    "match_threshold": 60,
+    "rule_weights": {
+      "title": 0.4,
+      "skills": 0.35,
+      "location": 0.15,
+      "salary": 0.1
+    }
+  },
+  "schedule": {
+    "fetch_interval_minutes": 30,
+    "score_interval_minutes": 60
+  }
+}`;
+
+function TunePage() {
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [saved, setSaved] = useState(false);
+  function handleSave() { setSaved(true); setTimeout(() => setSaved(false), 2000); }
+  return (
+    <div style={{ padding: '32px 24px', maxWidth: 700 }}>
+      <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', marginBottom: 8 }}>Tune</h1>
+      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginBottom: 24 }}>agent configuration · json</p>
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#F87171' }}></div>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent-amber)' }}></div>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ADE80' }}></div>
+          <span style={{ marginLeft: 8, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>agent.config.json</span>
+        </div>
+        <textarea value={config} onChange={e => setConfig(e.target.value)} style={{
+          display: 'block', width: '100%', minHeight: 380, background: 'transparent',
+          border: 'none', outline: 'none', resize: 'vertical',
+          fontFamily: 'var(--font-mono)', fontSize: 12, color: '#67E8F9',
+          padding: '16px', lineHeight: 1.7, letterSpacing: '0.01em',
+        }}></textarea>
+      </div>
+      <button onClick={handleSave} style={{
+        marginTop: 12, background: saved ? 'rgba(0,212,255,0.15)' : 'var(--accent-cyan)',
+        border: saved ? '1px solid rgba(0,212,255,0.4)' : 'none',
+        borderRadius: 7, padding: '10px 24px',
+        fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600,
+        color: saved ? 'var(--accent-cyan)' : '#000', cursor: 'pointer',
+        transition: 'all 0.2s',
+      }}>
+        {saved ? 'saved ✓' : 'save config →'}
+      </button>
+    </div>
+  );
+}
+
+// ─── CV PAGE ──────────────────────────────────────────────────────────────────
+function CVPage() {
+  const [dragging, setDragging] = useState(false);
+  const cvs = [
+    { name: 'resume_growth_2025.pdf', size: '142 KB', active: true, date: 'Apr 20' },
+    { name: 'resume_product_2024.pdf', size: '138 KB', active: false, date: 'Dec 14' },
+    { name: 'resume_general_v3.pdf', size: '126 KB', active: false, date: 'Oct 02' },
+  ];
+  return (
+    <div style={{ padding: '32px 24px', maxWidth: 600 }}>
+      <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.04em', marginBottom: 28 }}>CV</h1>
+      <div
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={e => { e.preventDefault(); setDragging(false); }}
+        style={{
+          border: `2px dashed ${dragging ? 'var(--accent-cyan)' : 'var(--border-mid)'}`,
+          borderRadius: 12, padding: '40px', textAlign: 'center', marginBottom: 24,
+          background: dragging ? 'rgba(0,212,255,0.04)' : 'transparent',
+          transition: 'border-color 0.15s, background 0.15s',
+        }}>
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ margin: '0 auto 12px', display: 'block', opacity: 0.4 }}>
+          <path d="M16 22V10M10 16l6-6 6 6" stroke="#6B7A99" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <rect x="4" y="24" width="24" height="4" rx="2" fill="#6B7A99" opacity="0.3"/>
+        </svg>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>drop pdf here or <span style={{ color: 'var(--accent-cyan)', cursor: 'pointer' }}>browse</span></p>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {cvs.map(cv => (
+          <div key={cv.name} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg-card)', border: `1px solid ${cv.active ? 'rgba(0,212,255,0.3)' : 'var(--border)'}`, borderRadius: 8, padding: '12px 16px' }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, opacity: 0.6 }}>
+              <rect x="2" y="1" width="12" height="14" rx="2" stroke="#6B7A99" strokeWidth="1.5"/>
+              <path d="M5 5h6M5 8h6M5 11h4" stroke="#6B7A99" strokeWidth="1.2" strokeLinecap="round"/>
+            </svg>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-primary)' }}>{cv.name}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#3A4460', marginTop: 2 }}>{cv.size} · {cv.date}</div>
+            </div>
+            {cv.active
+              ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent-cyan)', background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.3)', padding: '2px 8px', borderRadius: 20 }}>active</span>
+              : <button style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', background: 'none', border: '1px solid var(--border)', borderRadius: 5, padding: '4px 10px', cursor: 'pointer' }}>activate</button>
+            }
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accentColor": "cyan",
+  "cardColumns": 3,
+  "showSalary": true,
+  "showStats": true,
+  "loading": false,
+  "cardRadius": 10
+}/*EDITMODE-END*/;
+
+function App() {
+  const { TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakSlider, useTweaks } = window;
+  const [tweaks, setTweaks] = useTweaks(TWEAK_DEFAULTS);
+  const [activePage, setActivePage] = useState('Today');
+  const [filters, setFilters] = useState({
+    search: '', func: 'Any function', vertical: 'Any vertical',
+    seniority: 'Any seniority', location: 'Any location',
+    minSalary: '', minRule: '', minMatch: '',
+  });
+
+  const filteredJobs = JOBS.filter(job => {
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      if (!job.title.toLowerCase().includes(q) && !job.company.toLowerCase().includes(q)) return false;
+    }
+    if (filters.func !== 'Any function' && job.func !== filters.func) return false;
+    if (filters.vertical !== 'Any vertical' && job.vertical !== filters.vertical) return false;
+    if (filters.location !== 'Any location') {
+      if (filters.location === 'Remote' && !job.location.toLowerCase().includes('remote')) return false;
+    }
+    if (filters.minRule && job.ruleScore < parseInt(filters.minRule)) return false;
+    if (filters.minMatch && (job.match === null || job.match < parseInt(filters.minMatch))) return false;
+    return true;
+  });
+
+  const cols = tweaks.cardColumns;
+
+  const pageContent = () => {
+    if (activePage === 'Apply') return <ApplyPage />;
+    if (activePage === 'Settings') return <SettingsPage />;
+    if (activePage === 'Tune') return <TunePage />;
+    if (activePage === 'CV') return <CVPage />;
+    if (['Week', 'Archive'].includes(activePage)) return (
+      <div style={{ padding: '80px 24px', textAlign: 'center' }}>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>{activePage.toLowerCase()} · coming soon</p>
+      </div>
+    );
+
+    // Today page
+    return (
+      <div style={{ padding: '32px 24px', maxWidth: 1400, margin: '0 auto' }}>
+        <PageHeader jobCount={JOBS.length} />
+        {tweaks.showStats && <StatsRow jobs={JOBS} />}
+        <FilterBar filters={filters} setFilters={setFilters} />
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 14 }}>
+          {tweaks.loading
+            ? Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
+            : filteredJobs.length > 0
+              ? filteredJobs.map(job => (
+                  <JobCard
+                    key={job.id}
+                    job={tweaks.showSalary ? job : { ...job, salary: null }}
+                    accentColor={tweaks.accentColor}
+                    cardRadius={tweaks.cardRadius}
+                  />
+                ))
+              : <EmptyState />
+          }
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <NavBar activePage={activePage} setActivePage={setActivePage} />
+      <div className="main-scroll">
+        {pageContent()}
+      </div>
+      <TweaksPanel tweaks={tweaks} setTweaks={setTweaks}>
+        <TweakSection title="Accent Color">
+          <TweakRadio id="accentColor" options={["cyan", "amber"]} tweaks={tweaks} setTweaks={setTweaks} />
+        </TweakSection>
+        <TweakSection title="Grid Columns">
+          <TweakSlider id="cardColumns" min={1} max={4} step={1} tweaks={tweaks} setTweaks={setTweaks} />
+        </TweakSection>
+        <TweakSection title="Card Radius">
+          <TweakSlider id="cardRadius" min={0} max={20} step={2} tweaks={tweaks} setTweaks={setTweaks} />
+        </TweakSection>
+        <TweakSection title="Display">
+          <TweakToggle id="showSalary" label="Show salary" tweaks={tweaks} setTweaks={setTweaks} />
+          <TweakToggle id="showStats" label="Show stats bar" tweaks={tweaks} setTweaks={setTweaks} />
+          <TweakToggle id="loading" label="Show skeleton state" tweaks={tweaks} setTweaks={setTweaks} />
+        </TweakSection>
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

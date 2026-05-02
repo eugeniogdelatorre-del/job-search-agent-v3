@@ -1,0 +1,93 @@
+name: ai
+
+# Daily AI pipeline at 06:00 UTC (= 03:00 ART). Runs classify then cv_score
+# back-to-back in a single job — replaces the prior two-cron design
+# (classify @ 05:00 + cv_score @ 07:00) which gave AI work a 24-hour
+# round-trip from "scraped" to "scored".
+#
+# Why one job, not two `needs:`-chained jobs: shared runner, shared
+# checkout, shared pip cache, no second cold start. Same wall time as the
+# old two-cron flow but the new jobs from the overnight scrape are
+# scored in one pass instead of waiting an extra hour.
+#
+# Hard kill if MTD spend > $8 (scraper/budget.py asserts at top of each
+# script). 60-min job timeout covers both batches with slack — typical
+# wall time is <15 min total. cv_score still runs even if classify
+# fails non-zero (continue-on-error on the classify step) — cv_score
+# operates on jobs that already had function_category written, so the
+# classify failure only delays new arrivals, doesn't block scoring of
+# already-classified jobs.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Optional: cap jobs per run (default 500), applies to both"
+        required: false
+        default: ""
+
+concurrency:
+  group: ai
+  cancel-in-progress: false
+
+jobs:
+  ai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets
+        run: |
+          ok=true
+          [ -z "$SUPABASE_URL" ]         && echo "❌ SUPABASE_URL is not set"         && ok=false || echo "✅ SUPABASE_URL"
+          [ -z "$SUPABASE_SERVICE_KEY" ] && echo "❌ SUPABASE_SERVICE_KEY is not set" && ok=false || echo "✅ SUPABASE_SERVICE_KEY"
+          [ -z "$ANTHROPIC_API_KEY" ]    && echo "❌ ANTHROPIC_API_KEY is not set"    && ok=false || echo "✅ ANTHROPIC_API_KEY"
+          [ "$ok" = "false" ] && echo "" && echo "Add missing secrets at: repo → Settings → Secrets and variables → Actions" && exit 1 || true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: scraper/requirements.txt
+
+      - name: Install scraper dependencies
+        run: pip install -r scraper/requirements.txt
+
+      - name: Run classify
+        # Don't block cv_score if classify trips its own non-fatal exit
+        # (e.g. parse_failed > 0 returns 1). Budget kill (exit 3) and
+        # missing-secret (exit 2) bail the workflow elsewhere via
+        # the secret check above + budget.assert_under_budget.
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          if [ -n "${{ github.event.inputs.limit }}" ]; then
+            python scraper/classify.py --limit ${{ github.event.inputs.limit }}
+          else
+            python scraper/classify.py
+          fi
+
+      - name: Run cv_score
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          if [ -n "${{ github.event.inputs.limit }}" ]; then
+            python scraper/cv_score.py --limit ${{ github.event.inputs.limit }}
+          else
+            python scraper/cv_score.py
+          fi

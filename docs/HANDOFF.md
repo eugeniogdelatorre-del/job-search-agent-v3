@@ -36,10 +36,11 @@ Repo layout:
 ```
 scraper/              Python 3.12 — runs only in GitHub Actions
   scrape.py             every 4h (matrix: group 1 + group 2)
-  classify.py           daily 06:00 UTC — new jobs
-  cv_score.py           daily 07:00 UTC — warm jobs vs. active CV
+  classify.py           daily 06:00 UTC (run inside ai.yml) — new warm jobs
+  cv_score.py           daily 06:00 UTC (run inside ai.yml, after classify) — warm jobs vs. active CV
   weekly_summary.py     Sun 22:00 UTC — top 10 by match%
-  retention.py          called inside scrape.py; 60d hard delete
+  retention.py          called inside scrape.py; 60d hard delete + 30d auto-stale of Applied cards
+  stale_apps.py         called from retention.py; Applied → Stale at 30d untouched
   score.py              rule-based scorer + DEFAULT_CONFIG
   budget.py             $8 cap + Resend alert on trip
   supabase_client.py    service-role client
@@ -83,8 +84,7 @@ All times below are UTC; Buenos Aires is UTC−3.
 | Workflow | Cron (UTC) | BA time | Purpose |
 |---|---|---|---|
 | `scrape.yml` | `0 */4 * * *` | every 4h | Fetch + parse + dedup + rule-score + retention sweep. Matrix splits sources into group 1 and group 2 |
-| `classify.yml` | `0 6 * * *` | 03:00 daily | Batch-classify new jobs (function / vertical / seniority / remote / salary) |
-| `cv_score.yml` | `0 7 * * *` | 04:00 daily | Batch-score every warm job (rule score ≥ 60) against the active CV |
+| `ai.yml` | `0 6 * * *` | 03:00 daily | Single-job AI pipeline: classify warm jobs (rule score ≥ 60) → cv_score warm + first-seen ≤ 15 days. Replaces the prior two separate workflows |
 | `weekly_summary.yml` | `0 22 * * 0` | Sun 19:00 | Top-10 match-% email via Resend |
 
 Each workflow is idempotent and has `workflow_dispatch` for manual
@@ -103,6 +103,7 @@ runs. Cap trip raises `BudgetExceeded` and fires a Resend alert email
 | `SUPABASE_SERVICE_KEY` | all workflows |
 | `ANTHROPIC_API_KEY` | classify, cv_score |
 | `RESEND_API_KEY` | weekly_summary, + cap-trip alert in classify/cv_score |
+| `WEB3_CAREER_API_KEY` | scrape (optional) — when set, `web3career` parser uses the official API (~27k+ listings); when missing, it falls back to HTML scrape of the homepage |
 
 **Variables** (same page → Variables tab):
 
@@ -125,7 +126,7 @@ runs. Cap trip raises `BudgetExceeded` and fires a Resend alert email
 | `/` | **Today** — jobs seen in last 24h, default sort match% desc |
 | `/week` | Top 100 by match% over last 7 days |
 | `/archive` | Full filtered table, last 60 days, 50/page |
-| `/apply` | Kanban — Saved / Applied / Interview / Offer / Rejected. Drag-drop, notes, optimistic UI |
+| `/apply` | Kanban — Saved / Applied / Interview / Offer / Rejected / Stale. Drag-drop, notes, optimistic UI. Stale is auto-populated by `stale_apps.run` (Applied + 30d untouched); user can drag back. |
 | `/resume` | Upload + activate CV (PDF only, keeps last 5) |
 | `/tune` | JSON editor for scoring config (merges over `DEFAULT_CONFIG` in `score.py`) |
 | `/settings` | MTD spend chart, per-source health, account info |
@@ -164,7 +165,7 @@ web/ dashboard
     ├─ /apply                     → applications (snapshot fields)
     ├─ /resume                    → resumes (PDF → text via unpdf)
     ├─ /tune                      → scoring_config.config (jsonb)
-    └─ /settings                  → spend_tracking, source_runs
+    └─ /settings                  → spend_tracking, sources_health
     │
     ▼
 weekly_summary.py (Sun 22:00 UTC)
@@ -178,8 +179,15 @@ Key design choices worth knowing:
   retention sweep even if the underlying `job_id` goes NULL.
 - **Gate-rejected jobs are kept**, not dropped, so you can see what's
   filtering and why (`score_breakdown.gate_failed`).
-- **Warm threshold** gates CV scoring at `score_total ≥ 60`. Raising
-  to 70 roughly halves CV-scored volume.
+- **Warm threshold** gates both classify and CV scoring at
+  `score_total ≥ 60` (`cv_score.WARM_THRESHOLD`,
+  `classify.CLASSIFY_MIN_SCORE`). Raising to 70 roughly halves
+  CV-scored volume. Cold jobs are kept in the table but never
+  classified or CV-scored.
+- **CV-score age window** caps cv_score eligibility at
+  `first_seen_at` within the last 15 days
+  (`cv_score.MAX_JOB_AGE_DAYS`) — older unscored backlog rows are
+  considered stale and ignored.
 - **Prompt caching on CV scoring**: the CV is in the system block
   with `cache_control: ephemeral`, so per-job cost is ~3500 cached
   (0.1× base) + 600 fresh input + 250 output.
@@ -211,6 +219,7 @@ Full detail in `docs/RUNBOOK.md`. Short index:
 | Budget cap tripped | RUNBOOK §"Budget cap tripped" — SQL delete rows or raise cap |
 | Weekly summary missing | Check Actions; the usual causes are missing `RESEND_API_KEY` or no active CV |
 | Re-score existing rows after tune | Manual dispatch `scrape.yml` group 1, then group 2 |
+| Apply a schema change | Hand-run the SQL in `docs/migrations/<date>-<topic>.sql` via Supabase SQL editor |
 
 ## 10. Cost model (summary — full math in `docs/COST_MATH.md`)
 
@@ -228,9 +237,12 @@ loops, not expected usage. $8 sits under the $10 ceiling so retries
 between trip and alert email fit in budget.
 
 Knobs when/if costs climb (in order of effectiveness):
-1. Raise the warm threshold in `cv_score.py` (default 60 → try 70)
-2. Shrink description truncation in prompts (§4.1 uses 2000, §4.2 uses 3000 chars)
-3. Drop low-match aggregator sources (tier 1)
+1. Raise the warm threshold (default 60 → try 70). Update both
+   `cv_score.WARM_THRESHOLD` and `classify.CLASSIFY_MIN_SCORE`
+   together.
+2. Shorten `cv_score.MAX_JOB_AGE_DAYS` (default 15) to cut backlog spend.
+3. Shrink description truncation in prompts (§4.1 uses 2000, §4.2 uses 3000 chars)
+4. Drop low-match aggregator sources (tier 1)
 
 ## 11. Known gotchas / things that bit us
 
@@ -273,6 +285,10 @@ Knobs when/if costs climb (in order of effectiveness):
   workflow. Pass an `operation` label so the alert email names it.
 - Retention is 60 days on jobs. New long-lived user data must carry
   snapshot fields or live in its own table.
+- Application Kanban auto-stales `applied` cards untouched for 30 days
+  (`scraper/stale_apps.py`). The user can drag them back; staling is
+  reversible. Edits to notes count as activity (they bump
+  `applications.updated_at`).
 - Scoring config is a **partial override** of `DEFAULT_CONFIG` in
   `scraper/score.py`. The saved jsonb is deep-merged. The UI shows
   the override only, not the merged result.
@@ -300,7 +316,7 @@ If the next chat inherits a broken-something, run these first:
    where run_at >= date_trunc('month', now()) group by 1 order by 2 desc;
 
    -- Latest scrape result per source
-   select * from source_runs order by run_at desc limit 20;
+   select * from sources_health order by run_at desc limit 20;
 
    -- Unscored warm jobs backlog
    select count(*) from jobs
