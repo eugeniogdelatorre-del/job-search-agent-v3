@@ -3,6 +3,7 @@
 // Returns a normalized stage + per-job statuses for the dashboard button.
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -64,6 +65,15 @@ function deriveStage(
 }
 
 export async function GET(req: NextRequest) {
+  // Auth gate to match the rest of /api. Status data isn't catastrophic
+  // to leak, but unauthenticated polling could be used to fingerprint our
+  // cron schedule and there's no reason to allow it.
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
+
   const pat = process.env.GITHUB_PAT
   const owner = process.env.GITHUB_OWNER
   const repo = process.env.GITHUB_REPO

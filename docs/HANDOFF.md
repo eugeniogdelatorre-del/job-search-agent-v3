@@ -41,7 +41,9 @@ scraper/              Python 3.12 — runs only in GitHub Actions
   geo_filter.py         daily 06:00 UTC — AI location-eligibility check
   cv_score.py           daily 07:00 UTC — warm + geo-passed jobs vs. active CV
   weekly_summary.py     Sun 22:00 UTC — top 10 by match%
-  retention.py          called inside scrape.py; 60d hard delete
+  retention.py          called inside scrape.py; 60d hard delete + 30d auto-stale
+  stale_apps.py         called from retention.py; Applied → Stale at 30d untouched
+  _anthropic_batch.py   shared Anthropic SDK client + Batch poll + JSON parse
   score.py              rule-based scorer + hard-coded DEFAULT_CONFIG
   budget.py             $8 cap + Resend alert on trip
   supabase_client.py    service-role client
@@ -107,6 +109,7 @@ runs. Cap trip raises `BudgetExceeded` and fires a Resend alert email
 | `SUPABASE_SERVICE_KEY` | all workflows |
 | `ANTHROPIC_API_KEY` | classify, geo_filter, cv_score |
 | `RESEND_API_KEY` | weekly_summary, + cap-trip alert in classify/cv_score |
+| `WEB3_CAREER_API_KEY` | scrape (optional) — when set, `web3career` parser uses the official API (~27k+ listings); when missing, it falls back to HTML scrape of the homepage |
 
 **Variables** (same page → Variables tab):
 
@@ -130,7 +133,7 @@ runs. Cap trip raises `BudgetExceeded` and fires a Resend alert email
 | `/` | **Today** — jobs seen in last 24h, default sort match% desc |
 | `/week` | Top 100 by match% over last 7 days |
 | `/archive` | Full filtered table, last 60 days, 50/page |
-| `/apply` | Kanban — Saved / Applied / Interview / Offer / Rejected. Drag-drop, notes, optimistic UI |
+| `/apply` | Kanban — Saved / Applied / Interview / Offer / Rejected / Stale. Drag-drop, notes, optimistic UI. Stale is auto-populated by `stale_apps.run` (Applied + 30d untouched); user can drag back. |
 | `/resume` | Upload + activate CV (PDF only, keeps last 5) |
 | `/settings` | MTD spend chart, per-source health, account info |
 

@@ -16,7 +16,7 @@ export default async function SettingsPage() {
   const [spendRes, healthRes] = await Promise.all([
     supabase
       .from('spend_tracking')
-      .select('run_at, operation, model, cost_usd')
+      .select('run_at, operation, model, cost_usd, input_tokens, cached_input_tokens, output_tokens')
       .gte('run_at', monthStart.toISOString())
       .order('run_at', { ascending: true }),
     supabase

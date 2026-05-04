@@ -32,18 +32,20 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import os
-import re
 import sys
-import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scraper import budget, supabase_client
+from scraper._anthropic_batch import (
+    extract_json as _extract_json,
+    get_anthropic_client as _get_anthropic_client,
+    poll_batch as _poll_batch,
+)
 
 # Locked to Haiku 4.5 per §4.2. Full versioned ID required by Batch API.
 MODEL = "claude-haiku-4-5-20251001"
@@ -57,16 +59,21 @@ CACHE_WRITE_MULTIPLIER = 1.25
 CACHE_READ_MULTIPLIER = 0.10
 
 # Warm threshold — jobs below this rule-based score are skipped for AI scoring.
-# Lowered from 60 to 40 so the majority of visible jobs get scored (~444 vs 29).
-WARM_THRESHOLD = 40
+# Restored to 60 (the original spec value in COST_MATH.md) after the 40
+# experiment was driving cv_score volume ~15x over the cost model.
+# classify.py also uses 60 to skip cold jobs entirely; keep these in sync.
+WARM_THRESHOLD = 60
+
+# Skip cv_score for jobs first seen more than this many days ago. The scrape
+# pass keeps a job alive (is_active=true) for as long as the source still
+# lists it, but we don't need to keep paying to score every backlog row that
+# has been eligible for weeks and never got picked up — those are stale.
+MAX_JOB_AGE_DAYS = 15
 
 # Cap per run. The cache's 5-min TTL means every ~250 requests is a new
 # cache-write window; a single batch of 500 comfortably fits inside one
 # window. Over 500 and we'd risk re-paying the write cost mid-batch.
 MAX_JOBS_PER_RUN = 500
-
-POLL_INTERVAL_SECONDS = 30
-POLL_MAX_SECONDS = 25 * 60
 
 DESCRIPTION_MAX_CHARS = 3000  # per §4.2
 
@@ -165,23 +172,6 @@ Rules:
 """
 
 
-def _get_anthropic_client():
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        print("  [fatal] ANTHROPIC_API_KEY missing", file=sys.stderr)
-        return None
-    try:
-        from anthropic import Anthropic  # type: ignore
-    except ImportError:
-        print("  [fatal] anthropic SDK not installed", file=sys.stderr)
-        return None
-    try:
-        return Anthropic(api_key=key)
-    except Exception as e:
-        print(f"  [fatal] Anthropic client init failed: {e}", file=sys.stderr)
-        return None
-
-
 def _fetch_active_resume(client) -> dict | None:
     if client is None:
         return None
@@ -220,11 +210,15 @@ def _fetch_already_scored_ids(client, resume_id: str) -> set[str]:
 
 
 def _fetch_eligible_jobs(client, already_scored: set[str], limit: int) -> list[dict]:
-    """score_total >= WARM, is_active = true, geo_filtered = true, not already scored for this CV."""
+    """score_total >= WARM, is_active = true, geo_filtered = true,
+    first_seen within MAX_JOB_AGE_DAYS, not already scored for this CV."""
     if client is None:
         return []
     # Overfetch so exclusion of `already_scored` still leaves us close to `limit`.
     fetch_limit = min(limit * 2, 1000)
+    cutoff_iso = (
+        datetime.now(timezone.utc) - timedelta(days=MAX_JOB_AGE_DAYS)
+    ).isoformat()
     try:
         resp = (
             client.table("jobs")
@@ -235,6 +229,7 @@ def _fetch_eligible_jobs(client, already_scored: set[str], limit: int) -> list[d
             .eq("is_active", True)
             .eq("geo_filtered", True)   # only jobs that passed geo_filter
             .gte("score_total", WARM_THRESHOLD)
+            .gte("first_seen_at", cutoff_iso)
             .order("score_total", desc=True)
             .limit(fetch_limit)
             .execute()
@@ -289,45 +284,6 @@ def _submit_batch(anthropic_client, requests: list[dict]):
         return anthropic_client.messages.batches.create(requests=requests)
     except Exception as e:
         print(f"  [anthropic] batch create failed: {e}", file=sys.stderr)
-        return None
-
-
-def _poll_batch(anthropic_client, batch_id: str):
-    deadline = time.time() + POLL_MAX_SECONDS
-    while time.time() < deadline:
-        try:
-            batch = anthropic_client.messages.batches.retrieve(batch_id)
-        except Exception as e:
-            print(f"  [anthropic] poll failed (will retry): {e}", file=sys.stderr)
-            time.sleep(POLL_INTERVAL_SECONDS)
-            continue
-        status = getattr(batch, "processing_status", None)
-        counts = getattr(batch, "request_counts", None)
-        print(f"  [poll] status={status}  counts={counts}")
-        if status == "ended":
-            return batch
-        time.sleep(POLL_INTERVAL_SECONDS)
-    print("  [poll] timed out — next cron run will pick up the pieces", file=sys.stderr)
-    return None
-
-
-_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.MULTILINE)
-
-
-def _extract_json(text: str) -> dict | None:
-    stripped = _FENCE_RE.sub("", text or "").strip()
-    if not stripped:
-        return None
-    try:
-        return json.loads(stripped)
-    except Exception:
-        pass
-    m = re.search(r"\{.*\}", stripped, re.DOTALL)
-    if not m:
-        return None
-    try:
-        return json.loads(m.group(0))
-    except Exception:
         return None
 
 

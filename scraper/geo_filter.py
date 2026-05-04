@@ -38,11 +38,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -50,6 +48,11 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scraper import budget, supabase_client
+from scraper._anthropic_batch import (
+    extract_json as _extract_json,
+    get_anthropic_client as _get_anthropic_client,
+    poll_batch as _poll_batch,
+)
 
 MODEL = "claude-haiku-4-5-20251001"
 
@@ -58,8 +61,6 @@ BATCH_INPUT_PER_MTOK = 0.50
 BATCH_OUTPUT_PER_MTOK = 2.50
 
 MAX_JOBS_PER_RUN = 1000   # geo filter is cheap — process everything in one shot
-POLL_INTERVAL_SECONDS = 30
-POLL_MAX_SECONDS = 25 * 60
 
 DESCRIPTION_MAX_CHARS = 800   # location signal is in the first few lines
 
@@ -95,23 +96,6 @@ Rules (apply in order, first match wins):
 6. Remote status is "Hybrid" or "Onsite" in a different city → eligible=false
 7. Remote status "Unspecified": if no location constraint found → eligible=true; else apply rules 3-6
 """
-
-
-def _get_anthropic_client():
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        print("  [fatal] ANTHROPIC_API_KEY missing", file=sys.stderr)
-        return None
-    try:
-        from anthropic import Anthropic  # type: ignore
-    except ImportError:
-        print("  [fatal] anthropic SDK not installed", file=sys.stderr)
-        return None
-    try:
-        return Anthropic(api_key=key)
-    except Exception as e:
-        print(f"  [fatal] Anthropic client init failed: {e}", file=sys.stderr)
-        return None
 
 
 def _fetch_active_resume(client) -> dict | None:
@@ -270,43 +254,6 @@ def _submit_batch(anthropic_client, requests: list[dict]):
         return None
 
 
-def _poll_batch(anthropic_client, batch_id: str):
-    deadline = time.time() + POLL_MAX_SECONDS
-    while time.time() < deadline:
-        try:
-            batch = anthropic_client.messages.batches.retrieve(batch_id)
-        except Exception as e:
-            print(f"  [anthropic] poll failed (will retry): {e}", file=sys.stderr)
-            time.sleep(POLL_INTERVAL_SECONDS)
-            continue
-        status = getattr(batch, "processing_status", None)
-        counts = getattr(batch, "request_counts", None)
-        print(f"  [poll] status={status}  counts={counts}")
-        if status == "ended":
-            return batch
-        time.sleep(POLL_INTERVAL_SECONDS)
-    print("  [poll] timed out — next run will retry", file=sys.stderr)
-    return None
-
-
-_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.MULTILINE)
-
-
-def _extract_json(text: str) -> dict | None:
-    stripped = _FENCE_RE.sub("", text or "").strip()
-    if not stripped:
-        return None
-    try:
-        return json.loads(stripped)
-    except Exception:
-        pass
-    m = re.search(r"\{.*\}", stripped, re.DOTALL)
-    if not m:
-        return None
-    try:
-        return json.loads(m.group(0))
-    except Exception:
-        return None
 
 
 def _mark_jobs(

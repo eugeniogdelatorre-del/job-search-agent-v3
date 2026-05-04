@@ -79,3 +79,11 @@ scratch/
 # --- Supabase ---------------------------------------------------------------
 supabase/.temp/
 supabase/.branches/
+
+# --- Tooling artifacts (Claude Code, agent sessions, etc.) -----------------
+.superpowers/
+.claude/
+
+# --- Pip-install captures ---------------------------------------------------
+# `pip install '>=8.0'` without quoting writes a literal file named "=8.0".
+=*

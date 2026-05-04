@@ -3,6 +3,7 @@
 // GITHUB_PAT must be a fine-grained PAT with Actions: write + Contents: read.
 
 import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -19,6 +20,15 @@ function ghHeaders(pat: string) {
 }
 
 export async function POST() {
+  // Auth gate: this route triggers a paid GitHub Actions run (classify +
+  // geo_filter + cv_score burn real money). Match every other /api route
+  // and require a signed-in session. No anon access, full stop.
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
+
   const pat = process.env.GITHUB_PAT
   const owner = process.env.GITHUB_OWNER
   const repo = process.env.GITHUB_REPO
