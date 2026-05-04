@@ -32,13 +32,16 @@ import {
   type ApplicationStatus,
 } from '@/types/db'
 
-// Per-column colors and labels per design spec
+// Per-column colors and labels per design spec.
+// `stale` uses a dim slate dot to read as "they ghosted" — distinct from
+// the explicit-no red of `rejected` and from any active-pipeline color.
 const COLUMN_CONFIG: Record<ApplicationStatus, { label: string; dot: string }> = {
   saved:     { label: 'Saved',     dot: '#6B7A99' },
   applied:   { label: 'Applied',   dot: '#00D4FF' },
   interview: { label: 'Interview', dot: '#A78BFA' },
   offer:     { label: 'Offer',     dot: '#4ADE80' },
   rejected:  { label: 'Rejected',  dot: '#F87171' },
+  stale:     { label: 'Stale',     dot: '#3A4460' },
 }
 
 function Column({
@@ -120,7 +123,7 @@ export function KanbanBoard({ initial }: { initial: Application[] }) {
   )
 
   const columns: Record<ApplicationStatus, Application[]> = {
-    saved: [], applied: [], interview: [], offer: [], rejected: [],
+    saved: [], applied: [], interview: [], offer: [], rejected: [], stale: [],
   }
   for (const a of apps) columns[a.status].push(a)
 

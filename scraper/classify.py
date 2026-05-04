@@ -25,11 +25,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
-import os
-import re
 import sys
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -38,6 +34,11 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scraper import budget, supabase_client
+from scraper._anthropic_batch import (
+    extract_json as _extract_json,
+    get_anthropic_client as _get_anthropic_client,
+    poll_batch as _poll_batch,
+)
 
 # §4 locks Haiku 4.5 as the classifier model. The Batch API requires the
 # fully-versioned snapshot ID, so we pin to the same snapshot used by
@@ -54,11 +55,11 @@ BATCH_OUTPUT_PER_MTOK = 2.50
 # run if classification somehow fell behind for weeks.
 MAX_JOBS_PER_RUN = 500
 
-# Batch API usually returns in <5 min for our workload. Give it 25 before
-# we give up and let the next cron retry — the 30-min workflow timeout
-# leaves 5 min of slack for write-back + spend logging.
-POLL_INTERVAL_SECONDS = 30
-POLL_MAX_SECONDS = 25 * 60
+# Only classify jobs that would be cv_score candidates anyway. Cold jobs
+# (rule score below the warm threshold) never get cv_scored, so the
+# function_category they'd produce is never read. Keep this in sync with
+# cv_score.WARM_THRESHOLD — both should be the same number.
+CLASSIFY_MIN_SCORE = 60
 
 # §4.1: LOCKED system prompt. Do not edit.
 SYSTEM_PROMPT = (
@@ -106,25 +107,13 @@ VERTICALS = {
 REMOTE_STATUSES = {"Remote", "Hybrid", "Onsite", "Unspecified"}
 
 
-def _get_anthropic_client():
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        print("  [fatal] ANTHROPIC_API_KEY missing", file=sys.stderr)
-        return None
-    try:
-        from anthropic import Anthropic  # type: ignore
-    except ImportError:
-        print("  [fatal] anthropic SDK not installed", file=sys.stderr)
-        return None
-    try:
-        return Anthropic(api_key=key)
-    except Exception as e:
-        print(f"  [fatal] Anthropic client init failed: {e}", file=sys.stderr)
-        return None
-
-
 def _fetch_unclassified_jobs(client, limit: int) -> list[dict]:
-    """Jobs with function_category NULL — new arrivals that need classifying.
+    """Jobs with function_category NULL AND score_total >= CLASSIFY_MIN_SCORE
+    AND is_active=true — i.e. only jobs that could plausibly reach cv_score.
+
+    Cold jobs stay unclassified on purpose: their function_category is
+    never read by the warm-only UI views, and skipping them here drops
+    classify cost on the long tail (low-score aggregator postings).
 
     We also select salary_source so we don't overwrite a scraper-listed
     salary with a later AI-extracted one.
@@ -136,6 +125,8 @@ def _fetch_unclassified_jobs(client, limit: int) -> list[dict]:
             client.table("jobs")
             .select("id,title,company,location,description,salary_source")
             .is_("function_category", "null")
+            .eq("is_active", True)
+            .gte("score_total", CLASSIFY_MIN_SCORE)
             .limit(limit)
             .execute()
         )
@@ -179,49 +170,6 @@ def _submit_batch(anthropic_client, requests: list[dict]):
         return anthropic_client.messages.batches.create(requests=requests)
     except Exception as e:
         print(f"  [anthropic] batch create failed: {e}", file=sys.stderr)
-        return None
-
-
-def _poll_batch(anthropic_client, batch_id: str):
-    """Poll until processing_status = 'ended' or we hit the timeout."""
-    deadline = time.time() + POLL_MAX_SECONDS
-    while time.time() < deadline:
-        try:
-            batch = anthropic_client.messages.batches.retrieve(batch_id)
-        except Exception as e:
-            print(f"  [anthropic] poll failed (will retry): {e}", file=sys.stderr)
-            time.sleep(POLL_INTERVAL_SECONDS)
-            continue
-        status = getattr(batch, "processing_status", None)
-        counts = getattr(batch, "request_counts", None)
-        print(f"  [poll] status={status}  counts={counts}")
-        if status == "ended":
-            return batch
-        time.sleep(POLL_INTERVAL_SECONDS)
-    print("  [poll] timed out — next cron run will pick up the pieces", file=sys.stderr)
-    return None
-
-
-# Some models wrap JSON in ```json fences despite the prompt — strip both.
-_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.MULTILINE)
-
-
-def _extract_json(text: str) -> dict | None:
-    """Parse JSON from the model response, tolerating code fences and prose."""
-    stripped = _FENCE_RE.sub("", text or "").strip()
-    if not stripped:
-        return None
-    try:
-        return json.loads(stripped)
-    except Exception:
-        pass
-    # Last-ditch: grab the first {...} block.
-    m = re.search(r"\{.*\}", stripped, re.DOTALL)
-    if not m:
-        return None
-    try:
-        return json.loads(m.group(0))
-    except Exception:
         return None
 
 
