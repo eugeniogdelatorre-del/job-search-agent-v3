@@ -19,10 +19,16 @@ import re
 import sys
 import time
 
-# 30-second poll × 50 attempts = 25 minutes max wait, matching the prior
-# constants individually duplicated across classify / cv_score / geo_filter.
+# Anthropic Batch API does not advertise an SLA — most batches return in
+# a few minutes, but a 5-job batch was observed sitting in `processing`
+# for >25 minutes on 2026-05-07 (run #25493119564). The 25-minute cap was
+# too aggressive: it killed the poll mid-batch, which orphans the batch
+# (Anthropic still bills for it once it completes) and skips the
+# write-back. Bumped to 50 minutes; the surrounding workflow's
+# `timeout-minutes` is bumped to 55 so we still leave 5 minutes of slack
+# for write-back + spend logging.
 DEFAULT_POLL_INTERVAL_SECONDS = 30
-DEFAULT_POLL_MAX_SECONDS = 25 * 60
+DEFAULT_POLL_MAX_SECONDS = 50 * 60
 
 
 def get_anthropic_client():
