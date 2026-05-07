@@ -112,7 +112,7 @@ def _absolute_url(base: str, href: str) -> str:
 def parse(session: requests.Session, source: dict) -> list[dict]:
     url = source["url"]
     resp = session.get(url, timeout=REQUEST_TIMEOUT_SECONDS, allow_redirects=True)
-    if resp.status_code != 200:
+    if not (200 <= resp.status_code < 300):
         raise RuntimeError(f"generic {resp.status_code} for {url}")
 
     # Guard: if the careers page silently redirected to a homepage, bail out.

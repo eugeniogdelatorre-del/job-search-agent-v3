@@ -72,16 +72,21 @@ def parse(session: requests.Session, source: dict) -> list[dict]:
     if resp.status_code != 200:
         raise RuntimeError(f"ashby API {resp.status_code} for slug={slug}")
 
-    # Some boards return 200 with an empty body or an HTML challenge page.
-    # Raise a cleaner error than `Expecting value: line 1 column 1 (char 0)`.
+    # Some boards return 200 with an empty body or an HTML challenge page when
+    # the board has been shut down or moved.  Return [] so the source counts as
+    # success (jobs_found=0) instead of accumulating consecutive_failures.
     body = (resp.text or "").strip()
     if not body:
-        raise RuntimeError(f"ashby API empty body for slug={slug}")
+        import sys
+        print(f"  [ashby] empty body for slug={slug}, skipping", file=sys.stderr)
+        return []
     try:
         payload = resp.json() or {}
     except ValueError:
+        import sys
         snippet = body[:80].replace("\n", " ")
-        raise RuntimeError(f"ashby API non-JSON for slug={slug}: {snippet!r}") from None
+        print(f"  [ashby] non-JSON for slug={slug}: {snippet!r}, skipping", file=sys.stderr)
+        return []
     jobs = payload.get("jobs") or []
 
     # Multi-org boards (VC portfolio boards) embed the hiring company name in

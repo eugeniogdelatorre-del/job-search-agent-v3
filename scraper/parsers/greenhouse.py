@@ -62,7 +62,14 @@ def parse(session: requests.Session, source: dict) -> list[dict]:
         return []
     api_base = _EU_API_BASE if is_eu else _US_API_BASE
     api_url = f"{api_base}/v1/boards/{slug}/jobs?content=true"
-    resp = session.get(api_url, timeout=REQUEST_TIMEOUT_SECONDS)
+    try:
+        resp = session.get(api_url, timeout=REQUEST_TIMEOUT_SECONDS)
+    except requests.exceptions.ConnectionError:
+        if not is_eu:
+            raise
+        # EU API DNS is unreachable from GitHub Actions; fall back to US endpoint.
+        api_url = f"{_US_API_BASE}/v1/boards/{slug}/jobs?content=true"
+        resp = session.get(api_url, timeout=REQUEST_TIMEOUT_SECONDS)
     if resp.status_code != 200:
         raise RuntimeError(f"greenhouse API {resp.status_code} for slug={slug}")
 

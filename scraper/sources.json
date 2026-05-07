@@ -2,7 +2,7 @@
   "metadata": {
     "version": "2.2.0",
     "last_updated": "2026-05-07",
-    "total_sources": 438,
+    "total_sources": 435,
     "groups": 6,
     "schedule_note": "Each group runs once daily at its designated UTC hour to stay within free tier limits",
     "cjl_boost_companies": [
@@ -853,11 +853,7 @@
           "url": "https://jobs.zama.org",
           "category": "Privacy"
         },
-        {
-          "name": "Chromaway",
-          "url": "https://career.chromaway.com/jobs",
-          "category": "Infra"
-        },
+
         {
           "name": "Ankr",
           "url": "https://ankr-pbc.breezy.hr",
@@ -1054,11 +1050,7 @@
           "url": "https://remoteok.com/remote-crypto-jobs",
           "category": "Remote_Board"
         },
-        {
-          "name": "GetOnBoard",
-          "url": "https://www.getonbrd.com/jobs/blockchain",
-          "category": "LATAM_Board"
-        },
+
         {
           "name": "RemoteLeaf",
           "url": "https://remoteleaf.com/",
@@ -1762,11 +1754,7 @@
           "url": "https://job-boards.greenhouse.io/nansen",
           "category": "Analytics"
         },
-        {
-          "name": "Near Protocol",
-          "url": "https://boards.greenhouse.io/near",
-          "category": "L1"
-        },
+
         {
           "name": "Nomad Bridge",
           "url": "https://boards.greenhouse.io/nomad",
