@@ -211,34 +211,67 @@ def _fetch_already_scored_ids(client, resume_id: str) -> set[str]:
 
 def _fetch_eligible_jobs(client, already_scored: set[str], limit: int) -> list[dict]:
     """score_total >= WARM, is_active = true, geo_filtered = true,
-    first_seen within MAX_JOB_AGE_DAYS, not already scored for this CV."""
+    first_seen within MAX_JOB_AGE_DAYS, not already scored for this CV.
+
+    Pages through the candidate set top-down and excludes already_scored
+    *during iteration* — not after a single fixed window. The previous
+    "fetch top-1000, then post-filter" approach broke once the high-score
+    band was mostly already scored: the window filled with already-scored
+    rows and only a tiny residue survived the post-filter, leaving the
+    long tail of unscored eligibles permanently below the cutoff.
+
+    Concretely on Eugenio's data 2026-05-04: 1418 of the top-1000-by-score
+    were already scored, so a typical run would only see the 45 unscored
+    rows that happened to fall in that window — even though 459 unscored
+    eligible jobs existed in the DB.
+
+    PostgREST's URL length precludes a `not_.in_("id", <huge list>)`
+    server-side anti-join (Supabase's PostgREST caps at ~8KB; UUID lists
+    of >200 items overflow). Pagination + client-side exclusion is the
+    next-cleanest pattern and bounds DB load by HARD_CAP.
+    """
     if client is None:
         return []
-    # Overfetch so exclusion of `already_scored` still leaves us close to `limit`.
-    fetch_limit = min(limit * 2, 1000)
     cutoff_iso = (
         datetime.now(timezone.utc) - timedelta(days=MAX_JOB_AGE_DAYS)
     ).isoformat()
+
+    PAGE = 500
+    HARD_CAP = 5000  # safety: never page beyond this many rows in one run
+    eligible: list[dict] = []
+    offset = 0
+
     try:
-        resp = (
-            client.table("jobs")
-            .select(
-                "id,title,company,location,remote_status,description,"
-                "function_category,vertical,seniority"
+        while len(eligible) < limit and offset < HARD_CAP:
+            resp = (
+                client.table("jobs")
+                .select(
+                    "id,title,company,location,remote_status,description,"
+                    "function_category,vertical,seniority"
+                )
+                .eq("is_active", True)
+                .eq("geo_filtered", True)   # only jobs that passed geo_filter
+                .gte("score_total", WARM_THRESHOLD)
+                .gte("first_seen_at", cutoff_iso)
+                .order("score_total", desc=True)
+                .range(offset, offset + PAGE - 1)  # inclusive on both ends
+                .execute()
             )
-            .eq("is_active", True)
-            .eq("geo_filtered", True)   # only jobs that passed geo_filter
-            .gte("score_total", WARM_THRESHOLD)
-            .gte("first_seen_at", cutoff_iso)
-            .order("score_total", desc=True)
-            .limit(fetch_limit)
-            .execute()
-        )
-        rows = getattr(resp, "data", []) or []
+            rows = getattr(resp, "data", []) or []
+            if not rows:
+                break  # no more candidates
+            for r in rows:
+                if str(r["id"]) not in already_scored:
+                    eligible.append(r)
+                    if len(eligible) >= limit:
+                        break
+            offset += PAGE
     except Exception as e:
         print(f"  [supabase] fetch eligible failed: {e}", file=sys.stderr)
-        return []
-    eligible = [r for r in rows if str(r["id"]) not in already_scored]
+        # Fail-soft: return what we accumulated before the failure rather
+        # than dropping a partial backlog scan on the floor.
+        return eligible
+
     return eligible[:limit]
 
 

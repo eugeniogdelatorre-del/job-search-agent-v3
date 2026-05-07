@@ -9,11 +9,9 @@ name: weekly_summary
 # copies of the same roundup is harmless).
 
 on:
-  # Weekly schedule paused 2026-04-30 — running manually via workflow_dispatch
-  # until source-audit fixes settle (no point sending a roundup while the
-  # pipeline is being stabilized). To resume, restore:
-  #   schedule:
-  #     - cron: "0 22 * * 0"
+  # Resumed 2026-05-07. Sundays 22:00 UTC = 19:00 ART.
+  schedule:
+    - cron: "0 22 * * 0"
   workflow_dispatch:
     inputs:
       dry:

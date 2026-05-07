@@ -7,16 +7,16 @@ name: cv_score
 # resume, skipping anything already scored.
 #
 # Batch API + prompt caching on the CV — see scraper/cv_score.py docstring.
-# Hard kill if MTD spend > $8 (scraper/budget.py). 30-min timeout fits the
-# typical <5 min Batch turnaround with ample slack.
+# Hard kill if MTD spend > $8 (scraper/budget.py). 55-min timeout matches
+# the 50-min Anthropic Batch poll cap + 5-min slack.
 # concurrency.cancel-in-progress=false to avoid orphaning an in-flight
 # Batch poll on overlapping dispatches.
 
 on:
-  # Daily schedule paused 2026-04-30 — running manually via workflow_dispatch
-  # / pipeline.yml until source-audit fixes settle. To resume, restore:
-  #   schedule:
-  #     - cron: "0 7 * * *"
+  # Resumed 2026-05-07. Last stage of the daily pipeline — finishes by
+  # ~07:55 UTC = 04:55 ART, comfortably before the 7-AM-ART deadline.
+  schedule:
+    - cron: "0 7 * * *"
   workflow_dispatch:
     inputs:
       limit:
@@ -31,7 +31,7 @@ concurrency:
 jobs:
   cv_score:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 55
 
     steps:
       - uses: actions/checkout@v4

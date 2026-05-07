@@ -40,7 +40,9 @@ jobs:
   classify:
     needs: [scrape]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 55 = 50 min poll cap (DEFAULT_POLL_MAX_SECONDS in _anthropic_batch.py)
+    # + 5 min slack for write-back, dependency install, and pip cache miss.
+    timeout-minutes: 55
 
     steps:
       - uses: actions/checkout@v4
@@ -64,8 +66,12 @@ jobs:
 
   geo-filter:
     needs: [classify]
+    # Run even if classify failed/timed out — geo_filter operates on rows
+    # that already have function_category, so a stalled classify only delays
+    # the latest 5–20 jobs, not the backlog of already-classified ones.
+    if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 55
 
     steps:
       - uses: actions/checkout@v4
@@ -89,8 +95,12 @@ jobs:
 
   cv-score:
     needs: [geo-filter]
+    # Same rationale as geo-filter — cv_score operates on already-classified
+    # + geo-filtered rows, so a stalled upstream stage only delays today's
+    # newcomers, not the backlog drain we care about right now.
+    if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 55
 
     steps:
       - uses: actions/checkout@v4
