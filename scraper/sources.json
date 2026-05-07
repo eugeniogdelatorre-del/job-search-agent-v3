@@ -1,8 +1,8 @@
 {
   "metadata": {
     "version": "2.2.0",
-    "last_updated": "2026-04-30",
-    "total_sources": 412,
+    "last_updated": "2026-05-07",
+    "total_sources": 438,
     "groups": 6,
     "schedule_note": "Each group runs once daily at its designated UTC hour to stay within free tier limits",
     "cjl_boost_companies": [
@@ -1088,6 +1088,16 @@
           "name": "Hirechain",
           "url": "https://share.hirechain.io/job-board/le5rgc1a70",
           "category": "VC_Board"
+        },
+        {
+          "name": "Y Combinator Jobs",
+          "url": "https://www.ycombinator.com/jobs",
+          "category": "Board"
+        },
+        {
+          "name": "Work at a Startup",
+          "url": "https://www.workatastartup.com/companies?demographic=any&hasEquity=any&hasSalary=any&industry=any&interviewProcess=any&jobType=any&layout=list-compact&remote=only&remote=yes&sortBy=created_desc&tab=any&usVisaNotRequired=true",
+          "category": "Board"
         }
       ]
     },
@@ -2086,6 +2096,126 @@
           "name": "Yearn Finance",
           "url": "https://jobs.lever.co/yearnfinance",
           "category": "DeFi"
+        },
+        {
+          "name": "Legend Trade",
+          "url": "https://www.legend.trade/careers",
+          "category": "Trading"
+        },
+        {
+          "name": "Squads",
+          "url": "https://jobs.ashbyhq.com/squads",
+          "category": "Infra"
+        },
+        {
+          "name": "Liquid",
+          "url": "https://jobs.ashbyhq.com/liquid",
+          "category": "CEX"
+        },
+        {
+          "name": "Cluster Protocol",
+          "url": "https://www.clusterprotocol.ai/careers",
+          "category": "AI-Crypto"
+        },
+        {
+          "name": "AvenirX",
+          "url": "https://avenirx.com/career",
+          "category": "FinTech"
+        },
+        {
+          "name": "Kaio",
+          "url": "https://www.kaio.xyz/careers",
+          "category": "DeFi"
+        },
+        {
+          "name": "Hata",
+          "url": "https://explore.hata.io/careers",
+          "category": "FinTech"
+        },
+        {
+          "name": "Bitnomial",
+          "url": "https://jobs.ashbyhq.com/bitnomial",
+          "category": "Trading"
+        },
+        {
+          "name": "Slash",
+          "url": "https://www.slash.com/company/careers",
+          "category": "Payments"
+        },
+        {
+          "name": "Spektr",
+          "url": "https://www.spektr.com/careers",
+          "category": "RegTech"
+        },
+        {
+          "name": "ZenGo",
+          "url": "https://zengo.com/careers/",
+          "category": "Wallet"
+        },
+        {
+          "name": "Paxos Labs (Ashby)",
+          "url": "https://jobs.ashbyhq.com/paxoslabs",
+          "category": "Stablecoin"
+        },
+        {
+          "name": "NinjaTrader",
+          "url": "https://ninjatrader.com/careers/job-openings/",
+          "category": "Trading"
+        },
+        {
+          "name": "Pharos Network",
+          "url": "https://career.pharosnetwork.xyz/",
+          "category": "L1"
+        },
+        {
+          "name": "INXY",
+          "url": "https://www.inxy.io/careers",
+          "category": "Payments"
+        },
+        {
+          "name": "Mirantis",
+          "url": "https://www.mirantis.com/careers/",
+          "category": "Infra"
+        },
+        {
+          "name": "Multicoin Capital",
+          "url": "https://jobs.multicoin.capital/jobs",
+          "category": "VC_Board"
+        },
+        {
+          "name": "Galaxy (Careers)",
+          "url": "https://www.galaxy.com/careers",
+          "category": "VC"
+        },
+        {
+          "name": "Sequoia Capital",
+          "url": "https://jobs.sequoiacap.com/jobs?remoteOnly=true&postedSince=P7D",
+          "category": "VC_Board"
+        },
+        {
+          "name": "Blockchain Capital",
+          "url": "https://jobs.blockchaincapital.com/jobs?filter=eyJzZWFyY2hhYmxlX2xvY2F0aW9uX29wdGlvbiI6WyJyZW1vdGUiXX0%3D",
+          "category": "VC_Board"
+        },
+        {
+          "name": "Spartan Group",
+          "url": "https://jobs.spartangroup.io/jobs?filter=eyJzZWFyY2hhYmxlX2xvY2F0aW9uX29wdGlvbiI6WyJyZW1vdGUiXX0%3D",
+          "category": "VC_Board"
+        },
+        {
+          "name": "HashKey Capital Careers",
+          "url": "https://hashkey.capital/careers/index.html",
+          "category": "Exchange"
+        },
+        {
+          "name": "HashKey Capital Portfolio",
+          "url": "https://hashkey.capital/careers/portfolio.html",
+          "category": "VC_Board"
+        },
+        {
+          "name": "REAP Global",
+          "url": "https://reap.global/resources/company/careers",
+          "category": "VC"
         }
       ]
     },
