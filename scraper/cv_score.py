@@ -92,8 +92,8 @@ Pass cases: fully remote global, fully remote restricted to candidate's country/
 | Dimension            | Max | Measure |
 |----------------------|-----|---------|
 | skill_match          |  15 | How closely demonstrated skills match the role's daily tasks |
-| industry_fit         |  30 | How close candidate's industry background is to role's vertical |
-| title_alignment      |  15 | Role's primary function vs candidate's primary function (discipline, not level) |
+| industry_fit         |  20 | How close candidate's industry background is to role's vertical |
+| title_alignment      |  25 | Role's primary function vs candidate's primary function (discipline, not level) |
 | seniority            |  15 | Level fit, ownership model, scope of responsibility |
 | requirements         |  15 | % of explicit must-haves met, weighted by centrality |
 | geography            |  10 | Timezone fit, language mandates, remote policy |
@@ -101,9 +101,9 @@ Pass cases: fully remote global, fully remote restricted to candidate's country/
 ### DIMENSION RULES
 **skill_match (max 15):** Full match=100% contribution. Adjacent/transferable=50-90% transfer factor. Missing creative skills (video, graphic design) = -1 to -2 pts. Signature skills with measurable achievements = +1 to +2 boost if role requires them.
 
-**industry_fit (max 30):** Exact vertical=26-30. Adjacent vertical=17-22. Partial match=10-16. Weak/no match=0-9. Web3/crypto/DeFi/GameFi/NFT/DAO roles get +15 pts applied as a POST-scoring adjustment (not in this dimension).
+**industry_fit (max 20):** Exact vertical=18-20. Adjacent vertical=12-17. Partial match=7-11. Weak/no match=0-6. Web3/crypto/DeFi/GameFi/NFT/DAO roles get +15 pts applied as a POST-scoring adjustment (not in this dimension).
 
-**title_alignment (max 15):** Perfect (same function category)=15. Similar (adjacent, meaningful overlap)=10. Long shot (different but evidenced bridge skill)=5. Mismatch=0-3. Determine from CV responsibilities, not just title.
+**title_alignment (max 25):** Perfect (same function category)=23-25. Similar (adjacent, meaningful overlap)=15-22. Long shot (different but evidenced bridge skill)=7-14. Mismatch=0-6. Determine from CV responsibilities, not just title.
 
 **seniority (max 15):** Role below candidate's level = positive signal, do not penalize. Multi-function/solo operator evidence in CV = +2 if role requires it.
 

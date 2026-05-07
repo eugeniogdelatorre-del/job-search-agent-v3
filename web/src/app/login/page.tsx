@@ -1,7 +1,13 @@
 ﻿'use client'
 
 // Magic-link sign-in — dark terminal redesign.
-// Single-user: only eugeniogdelatorre@gmail.com can sign in (enforced DB-side).
+// Allowlist enforced DB-side via the auth.users INSERT trigger
+// `block_unauthorized_signups`. Currently allows:
+//   - eugeniogdelatorre@gmail.com (owner)
+//   - federicowalter11@gmail.com
+//   - anamarta.baptista@gmail.com
+// To add more, edit `docs/migrations/2026-05-07-widen-signup-allowlist.sql`
+// (just append to ARRAY[...]) and re-run it via Supabase SQL editor or MCP.
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
