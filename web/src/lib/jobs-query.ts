@@ -12,6 +12,17 @@ export type QueryOpts = {
   limit: number
   offset?: number
   withCount?: boolean
+  /**
+   * When true, drop rows whose active-CV `job_scores[0].match_score` is null
+   * — i.e. the AI scoring pipeline hasn't reached them yet (or they were
+   * marked location-ineligible at score 0).
+   *
+   * Important: this is a POST-fetch filter. The `total` returned by this
+   * function still reflects the SQL-scoped count (active + gate-passed +
+   * scope), so the caller can show "scored X / indexed Y" without an
+   * extra round-trip.
+   */
+  requireScored?: boolean
 }
 
 export type QueryResult = {
@@ -21,7 +32,7 @@ export type QueryResult = {
 }
 
 export async function queryJobs(opts: QueryOpts): Promise<QueryResult> {
-  const { filters, scopeSinceDays, limit, offset = 0, withCount } = opts
+  const { filters, scopeSinceDays, limit, offset = 0, withCount, requireScored = false } = opts
   const supabase = createClient()
 
   const { data: activeResume } = await supabase
@@ -78,13 +89,17 @@ export async function queryJobs(opts: QueryOpts): Promise<QueryResult> {
 
   const rows = (data ?? []) as JobWithScore[]
 
-  const filtered =
+  let filtered =
     typeof filters.matchMin === 'number'
       ? rows.filter(
           (r) =>
             (r.job_scores?.[0]?.match_score ?? -1) >= (filters.matchMin ?? 0)
         )
       : rows
+
+  if (requireScored) {
+    filtered = filtered.filter((r) => r.job_scores?.[0]?.match_score != null)
+  }
 
   filtered.sort((a, b) => {
     const am = a.job_scores?.[0]?.match_score ?? -1

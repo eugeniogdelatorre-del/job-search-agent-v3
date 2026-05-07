@@ -6,16 +6,17 @@ name: classify
 # geo_filter.yml needs remote_status populated before it runs — this ordering
 # ensures that. cv_score.yml fires at 07:00 UTC.
 #
-# Hard kill if MTD spend > $8 (scraper/budget.py). 30-min timeout gives
-# the Batch API plenty of slack — typical runs complete in <5 min.
+# Hard kill if MTD spend > $8 (scraper/budget.py). 55-min timeout matches
+# the 50-min Anthropic Batch poll cap (DEFAULT_POLL_MAX_SECONDS in
+# _anthropic_batch.py) plus 5-min slack for write-back and pip cache miss.
 # concurrency.cancel-in-progress=false so a workflow_dispatch doesn't
 # orphan a running Batch poll.
 
 on:
-  # Daily schedule paused 2026-04-30 — running manually via workflow_dispatch
-  # / pipeline.yml until source-audit fixes settle. To resume, restore:
-  #   schedule:
-  #     - cron: "0 5 * * *"
+  # Resumed 2026-05-07. Fires after the 04:00 UTC scrape, before the
+  # 06:00 UTC geo_filter — gives scrape ~55 min headroom.
+  schedule:
+    - cron: "0 5 * * *"
   workflow_dispatch:
     inputs:
       limit:
@@ -30,7 +31,7 @@ concurrency:
 jobs:
   classify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 55
 
     steps:
       - uses: actions/checkout@v4

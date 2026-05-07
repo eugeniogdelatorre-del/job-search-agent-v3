@@ -26,7 +26,11 @@ export default async function TodayPage({
 
   const filters = parseFilters(searchParams)
 
-  // Run jobs query + applications count in parallel for the stats bar
+  // Run jobs query + applications count in parallel for the stats bar.
+  // We DON'T pass requireScored here so `total` reflects every indexed
+  // job in scope — the "indexed" stat shouldn't shrink when the AI is
+  // behind. The card grid below uses requireScored=true to hide unscored
+  // rows; counts and visuals are intentionally decoupled.
   const [jobsResult, appCountResult] = await Promise.all([
     queryJobs({ filters, scopeSinceDays: 1, limit: 60, withCount: true }),
     supabase.from('applications').select('id', { count: 'exact', head: true }),
@@ -78,9 +82,11 @@ export default async function TodayPage({
       {/* Filters */}
       <FilterBar hidePostedWithin />
 
-      {/* Job grid — pre-fetched; Suspense wraps refetch on filter change */}
+      {/* Job grid — pre-fetched; Suspense wraps refetch on filter change.
+          requireScored hides cards the AI hasn't reached yet. The header
+          counter still displays the full indexed total above. */}
       <Suspense fallback={<JobListSkeleton />}>
-        <JobList filters={filters} scopeSinceDays={1} limit={60} />
+        <JobList filters={filters} scopeSinceDays={1} limit={60} requireScored />
       </Suspense>
     </main>
   )

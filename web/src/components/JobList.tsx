@@ -12,11 +12,17 @@ type Props = {
   filters: Filters
   scopeSinceDays?: number
   limit?: number
+  /**
+   * When true, hide jobs that don't have an AI match_score yet for the
+   * active CV. The "indexed" count on the parent page is unaffected — it
+   * still shows total jobs in scope. Only the visual card grid is filtered.
+   */
+  requireScored?: boolean
 }
 
-export async function JobList({ filters, scopeSinceDays, limit = 100 }: Props) {
+export async function JobList({ filters, scopeSinceDays, limit = 100, requireScored = false }: Props) {
   const supabase = createClient()
-  const { rows, error } = await queryJobs({ filters, scopeSinceDays, limit })
+  const { rows, error } = await queryJobs({ filters, scopeSinceDays, limit, requireScored })
 
   if (error) {
     return (
@@ -50,6 +56,16 @@ export async function JobList({ filters, scopeSinceDays, limit = 100 }: Props) {
       !!filters.remote   || !!filters.q        || !!filters.salaryFloor ||
       !!filters.matchMin || !!filters.postedWithin
 
+    // Distinguish "filters too tight" from "nothing scored yet" — when the
+    // page asks for scored-only, the user's mental model is "the AI hasn't
+    // caught up" not "your filters are wrong."
+    const headline = requireScored && !anyFiltersActive
+      ? 'no scored jobs in this window yet'
+      : 'no jobs match your filters'
+    const subline = requireScored && !anyFiltersActive
+      ? "the AI scoring pipeline hasn't reached today's batch — check back after the next morning run"
+      : null
+
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-2">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3A4460" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -57,8 +73,13 @@ export async function JobList({ filters, scopeSinceDays, limit = 100 }: Props) {
           <line x1="8" y1="11" x2="14" y2="11"/>
         </svg>
         <p className="font-mono text-[13px]" style={{ color: '#6B7A99' }}>
-          no jobs match your filters
+          {headline}
         </p>
+        {subline && (
+          <p className="font-mono text-[11px] max-w-[400px] text-center" style={{ color: '#3A4460' }}>
+            {subline}
+          </p>
+        )}
         {anyFiltersActive && (
           <p className="font-mono text-[11px]" style={{ color: '#3A4460' }}>
             <Link href="?" style={{ color: '#6B7A99', textDecoration: 'underline' }}>

@@ -9,14 +9,15 @@ name: geo_filter
 # regions that exclude the candidate, are set is_active=false + geo_filtered=true.
 # Jobs that pass are marked geo_filtered=true (is_active unchanged).
 #
-# Hard kill if MTD spend > $8 (scraper/budget.py).
+# Hard kill if MTD spend > $8 (scraper/budget.py). 55-min timeout matches
+# the 50-min Anthropic Batch poll cap + 5-min slack.
 # concurrency.cancel-in-progress=false to avoid orphaning an in-flight Batch poll.
 
 on:
-  # Daily schedule paused 2026-04-30 — running manually via workflow_dispatch
-  # / pipeline.yml until source-audit fixes settle. To resume, restore:
-  #   schedule:
-  #     - cron: "0 6 * * *"
+  # Resumed 2026-05-07. 1h after classify so it has time to write back
+  # function_category / remote_status before geo_filter reads them.
+  schedule:
+    - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
       limit:
@@ -31,7 +32,7 @@ concurrency:
 jobs:
   geo_filter:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 55
 
     steps:
       - uses: actions/checkout@v4

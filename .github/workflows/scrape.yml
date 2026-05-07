@@ -5,10 +5,12 @@ name: scrape
 # workflow_dispatch keeps an optional 'group' input for debugging partial runs.
 
 on:
-  # Daily schedule paused 2026-04-30 — running manually via workflow_dispatch
-  # / pipeline.yml until source-audit fixes settle. To resume, restore:
-  #   schedule:
-  #     - cron: "0 4 * * *"
+  # Resumed 2026-05-07 after the source-audit + cost-cut work landed.
+  # 04:00 UTC = 01:00 ART. classify @ 05:00, geo_filter @ 06:00,
+  # cv_score @ 07:00 → all done by ~07:55 UTC = 04:55 ART, well before
+  # the 7-AM-ART (10:00 UTC) deadline.
+  schedule:
+    - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
       group:
