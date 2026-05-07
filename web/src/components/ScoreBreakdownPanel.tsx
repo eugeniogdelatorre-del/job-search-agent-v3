@@ -4,10 +4,21 @@ type Props = {
   score: Pick<JobScore, 'match_score' | 'strengths' | 'gaps' | 'verdict_one_liner' | 'score_breakdown_v5'>
 }
 
+// Maxes must mirror scraper/cv_score.py SYSTEM_PREFIX ("DIMENSIONS" table).
+// industry_fit dropped 30→20 and title_alignment raised 15→25 in
+// 2026-05-07 to weight "is this person actually in the right discipline"
+// above "is this person in the exact right vertical." Sum is still 100.
+//
+// Note: rows already in job_scores were graded against the old scale
+// (industry_fit out of 30, title_alignment out of 15). They render as
+// "26/20"-style "above max" until cv_score re-scores them — acceptable
+// short-term cosmetic. To bulk re-score, run:
+//   UPDATE job_scores SET score_breakdown_v5 = NULL;
+// and the next cv_score run picks them up.
 const DIMENSIONS = [
   { key: 'skill_match',      label: 'Skill Match',   max: 15 },
-  { key: 'industry_fit',     label: 'Industry Fit',  max: 30 },
-  { key: 'title_alignment',  label: 'Title Align',   max: 15 },
+  { key: 'industry_fit',     label: 'Industry Fit',  max: 20 },
+  { key: 'title_alignment',  label: 'Title Align',   max: 25 },
   { key: 'seniority',        label: 'Seniority',     max: 15 },
   { key: 'requirements',     label: 'Requirements',  max: 15 },
   { key: 'geography',        label: 'Geography',     max: 10 },
