@@ -86,7 +86,12 @@ export type Job = {
   title: string
   company: string | null
   location: string | null
-  remote_status: RemoteStatus | null
+  // Audit N (2026-05-13): the four enum-style columns are NOT NULL in
+  // the DB after migration ``web/sql/005_jobs_enum_unspecified_backfill.sql``.
+  // The DB default is 'Unspecified' / 'Other', so consumer code only
+  // needs ONE branch (still check for the sentinel, just not also for null).
+  // If the migration is rolled back, restore `| null` on these four.
+  remote_status: RemoteStatus
   salary_min_usd: number | null
   salary_max_usd: number | null
   salary_source: string | null
@@ -95,12 +100,14 @@ export type Job = {
   source: string
   source_tier: number | null
   source_url: string | null
-  function_category: FunctionCategory | null
+  function_category: FunctionCategory
   function_confidence: number | null
-  vertical: Vertical | null
-  seniority: Seniority | null
+  vertical: Vertical
+  seniority: Seniority
   score_total: number | null
-  score_breakdown: Record<string, unknown> | null
+  // Audit L3: `score_breakdown` (v4 / old format) is never read in the
+  // web app. The newer score_breakdown_v5 lives on job_scores. Dropping
+  // from the type keeps SELECTs honest about what they need.
   first_seen_at: string
   last_seen_at: string
   is_active: boolean
@@ -130,7 +137,12 @@ export type ScoreBreakdownV5 = {
 export type JobScore = {
   job_id: string
   resume_id: string
-  match_score: number
+  // Audit L4: nullable in the DB (cv_score.py writes 0 for location-
+  // ineligible rows but historical pre-v5 rows can be null). All
+  // consumer code already defends with `?? null` / `!= null` — making
+  // the type honest stops the compiler from telling us we don't need
+  // those guards.
+  match_score: number | null
   strengths: string[]
   gaps: string[]
   verdict_one_liner: string | null

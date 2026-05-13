@@ -23,7 +23,6 @@ export function JobCard({
   savedApplicationId?: string | null
   onFocus?: (job: JobWithScore) => void
 }) {
-  const [hovered, setHovered] = useState(false)
   // Inline-expand toggle. Separate from the parent's `onFocus` flow (which
   // navigates to a single-card focused view) so users can scan dim bars
   // without losing grid context — useful during triage.
@@ -38,43 +37,34 @@ export function JobCard({
     window.open(applyHref, '_blank', 'noopener,noreferrer')
   }
 
-  // Tags: function, vertical, seniority (skip Unspecified), remote (skip Unspecified)
-  const tags = (
-    [job.function_category, job.vertical,
-      job.seniority !== 'Unspecified' ? job.seniority : null,
-      job.remote_status !== 'Unspecified' ? job.remote_status : null,
+  // Tags: function, vertical, seniority, remote.
+  // Audit M24: previously `job.seniority !== 'Unspecified' ? ... : null`
+  // returned the value when seniority was `null` (because `null !==
+  // 'Unspecified'`), so a tag pill literally labeled "null" could appear.
+  // Treat BOTH the DB sentinel ('Unspecified') and SQL null as "no tag".
+  // See M25 for the longer-term DB-side fix.
+  const tags: string[] = (
+    [
+      job.function_category,
+      job.vertical,
+      job.seniority,
+      job.remote_status,
     ] as (string | null)[]
-  ).filter((t): t is string => t !== null && t !== undefined)
+  ).filter(
+    (t): t is string => typeof t === 'string' && t.length > 0 && t !== 'Unspecified',
+  )
 
   return (
     <div
-      className={`relative flex flex-col gap-2.5 rounded-[10px] p-4 select-none ${onFocus ? 'cursor-pointer' : 'cursor-default'}`}
-      style={{
-        background:  '#0F1117',
-        border:      `1px solid ${hovered ? 'rgba(0,212,255,0.35)' : '#1E2330'}`,
-        boxShadow:   hovered
-          ? '0 0 0 1px rgba(0,212,255,0.1), 0 4px 24px rgba(0,212,255,0.06)'
-          : 'none',
-        transform:   hovered ? 'translateY(-1px)' : 'none',
-        transition:  'border-color 0.18s, box-shadow 0.18s, transform 0.18s',
-      }}
+      className={`jc-hover relative flex flex-col gap-2.5 rounded-[10px] p-4 select-none ${onFocus ? 'cursor-pointer' : 'cursor-default'}`}
+      style={{ background: '#0F1117' }}
       onClick={onFocus ? () => onFocus(job) : undefined}
       role={onFocus ? 'button' : undefined}
       tabIndex={onFocus ? 0 : undefined}
       onKeyDown={onFocus ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onFocus(job) } } : undefined}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
-      {/* Top shimmer accent line */}
-      <div
-        className="absolute top-0 left-0 right-0 h-px rounded-t-[10px]"
-        style={{
-          background: hovered
-            ? 'linear-gradient(90deg, transparent, rgba(0,212,255,0.5), transparent)'
-            : 'transparent',
-          transition: 'background 0.18s',
-        }}
-      />
+      {/* Top shimmer accent line — see .jc-hover:hover .jc-shimmer in globals.css */}
+      <div className="jc-shimmer absolute top-0 left-0 right-0 h-px rounded-t-[10px]" />
 
       {/* Row 1 — title + match badge */}
       <div className="flex items-start gap-3">

@@ -72,9 +72,15 @@ can legally work this job from their current location.
 Return JSON only — no prose, no code fences.
 """
 
-# LOCKED user template — {candidate_location} injected once per batch build.
+# LOCKED user template — {candidate_city}, {candidate_country} injected
+# once per batch build. SPLIT into city + country (audit 2026-05-13)
+# so Hybrid can relax to country-level matching while Onsite stays
+# city-strict — daily commute is city-bound but hybrid (2-3 days/week)
+# is flexible across nearby cities in the same country.
 USER_TEMPLATE = """\
-Candidate location: {candidate_location}
+Candidate location:
+  City:    {candidate_city}
+  Country: {candidate_country}
 
 Job:
   Title: {title}
@@ -88,17 +94,41 @@ Return exactly:
 
 Rules (apply in order, first match wins):
 1. Location field is empty/null/unknown → eligible=true
-2. Remote status is "Remote" with NO geographic restriction in description → eligible=true
-3. Remote status is "Remote" but description restricts to a country/region/timezone
-   that EXCLUDES the candidate's country → eligible=false
-4. Remote status is "Remote" and restriction INCLUDES candidate's country/region → eligible=true
-5. Remote status is "Hybrid" or "Onsite" AND city matches candidate's city → eligible=true
-6. Remote status is "Hybrid" or "Onsite" in a different city → eligible=false
-7. Remote status "Unspecified": if no location constraint found → eligible=true; else apply rules 3-6
+2. Remote status is "Remote" with NO geographic restriction in description
+   → eligible=true
+3. Remote status is "Remote" but description restricts to a country, region,
+   or timezone that EXCLUDES the candidate's country → eligible=false
+4. Remote status is "Remote" and the restriction INCLUDES the candidate's
+   country, region, or timezone → eligible=true
+5. Remote status is "Hybrid" AND the job is in the candidate's COUNTRY
+   (any city) → eligible=true
+6. Remote status is "Hybrid" outside the candidate's country, BUT the
+   description ALSO explicitly offers remote work to the candidate's
+   country, region, or timezone (e.g. "open to remote in LATAM",
+   "remote-friendly for Americas") → eligible=true
+7. Remote status is "Hybrid" outside the candidate's country with no
+   remote alternative offered → eligible=false
+8. Remote status is "Onsite" AND the job's city matches the candidate's
+   CITY → eligible=true
+9. Remote status is "Onsite" in a different city → eligible=false
+10. Remote status "Unspecified": if no location constraint found
+    → eligible=true; else apply rules 3-9
+
+Important: relocation offers / visa sponsorship for an onsite role do
+NOT make the role eligible. Only remote-work offers do. The candidate
+will not relocate.
 """
 
 
 def _fetch_active_resume(client) -> dict | None:
+    """Return the active CV row, or None.
+
+    Audit H27: ``.maybe_single()`` raises if >1 row matches (e.g. two
+    active resumes from a mid-migration state). The bare except below
+    then logged a misleading "fetch active resume failed". Switching to
+    ``.limit(1)`` returns the first match deterministically and lets the
+    operator clean up the data later.
+    """
     if client is None:
         return None
     try:
@@ -106,10 +136,12 @@ def _fetch_active_resume(client) -> dict | None:
             client.table("resumes")
             .select("id,parsed_text")
             .eq("is_active", True)
-            .maybe_single()
+            .order("id")
+            .limit(1)
             .execute()
         )
-        return getattr(resp, "data", None)
+        rows = getattr(resp, "data", None) or []
+        return rows[0] if rows else None
     except Exception as e:
         print(f"  [supabase] fetch active resume failed: {e}", file=sys.stderr)
         return None
@@ -190,6 +222,28 @@ def _resolve_candidate_location(anthropic_client, resume_text: str) -> str:
     return "Buenos Aires, Argentina"
 
 
+def _split_city_country(location: str) -> tuple[str, str]:
+    """Split a "City, Country" string into structured (city, country).
+
+    Tolerant of single-token inputs ("Argentina" → ("", "Argentina")),
+    multi-comma inputs ("San Francisco, CA, USA" → ("San Francisco", "USA"),
+    keeping only the last comma-separated chunk as country), and weird
+    whitespace. The geo prompt uses these independently so Hybrid can
+    relax to country-level while Onsite stays city-strict.
+    """
+    if not location:
+        return ("", "")
+    parts = [p.strip() for p in location.split(",") if p.strip()]
+    if len(parts) == 1:
+        # Could be just a city ("Buenos Aires") or just a country
+        # ("Argentina") — pass the single token as BOTH so the prompt's
+        # rules 5-8 degrade gracefully (Hybrid still gates on country
+        # match, Onsite on city match, and the model will resolve which
+        # one the input represents).
+        return (parts[0], parts[0])
+    return (parts[0], parts[-1])
+
+
 def _fetch_unfiltered_jobs(client, limit: int) -> list[dict]:
     """Jobs not yet geo-filtered AND already classified.
 
@@ -217,10 +271,11 @@ def _fetch_unfiltered_jobs(client, limit: int) -> list[dict]:
         return []
 
 
-def _build_user_message(job: dict, candidate_location: str) -> str:
+def _build_user_message(job: dict, candidate_city: str, candidate_country: str) -> str:
     desc = (job.get("description") or "").strip()[:DESCRIPTION_MAX_CHARS]
     return USER_TEMPLATE.format(
-        candidate_location=candidate_location,
+        candidate_city=candidate_city or "(unknown)",
+        candidate_country=candidate_country or "(unknown)",
         title=(job.get("title") or "")[:200],
         company=(job.get("company") or "Unknown"),
         location=(job.get("location") or "Unspecified"),
@@ -229,7 +284,7 @@ def _build_user_message(job: dict, candidate_location: str) -> str:
     )
 
 
-def _build_batch_requests(jobs: list[dict], candidate_location: str) -> list[dict]:
+def _build_batch_requests(jobs: list[dict], candidate_city: str, candidate_country: str) -> list[dict]:
     out = []
     for job in jobs:
         out.append({
@@ -239,7 +294,7 @@ def _build_batch_requests(jobs: list[dict], candidate_location: str) -> list[dic
                 "max_tokens": 120,
                 "system": SYSTEM_PROMPT,
                 "messages": [
-                    {"role": "user", "content": _build_user_message(job, candidate_location)}
+                    {"role": "user", "content": _build_user_message(job, candidate_city, candidate_country)}
                 ],
             },
         })
@@ -273,15 +328,23 @@ def _mark_jobs(
         for i in range(0, len(lst), n):
             yield lst[i:i + n]
 
+    # Audit H18: previously this read ``len(resp.data or chunk)`` which
+    # silently fell back to the chunk length on any write that returned
+    # no representation. The reported counts were therefore cosmetic —
+    # a write that failed at the row level would still claim success.
+    # Switch to ``count="exact"`` so we report what the server actually
+    # changed. Helper lives in supabase_client to stay DRY.
+    from scraper.supabase_client import _affected_count
+
     for chunk in _chunks(pass_ids, 100):
         try:
             resp = (
                 client.table("jobs")
-                .update({"geo_filtered": True})
+                .update({"geo_filtered": True}, count="exact")
                 .in_("id", chunk)
                 .execute()
             )
-            passed += len(getattr(resp, "data", None) or chunk)
+            passed += _affected_count(resp)
         except Exception as e:
             print(f"  [supabase] mark-pass failed: {e}", file=sys.stderr)
 
@@ -294,15 +357,18 @@ def _mark_jobs(
             try:
                 resp = (
                     client.table("jobs")
-                    .update({
-                        "geo_filtered": True,
-                        "is_active": False,
-                        "geo_reject_reason": reason,
-                    })
+                    .update(
+                        {
+                            "geo_filtered": True,
+                            "is_active": False,
+                            "geo_reject_reason": reason,
+                        },
+                        count="exact",
+                    )
                     .in_("id", chunk)
                     .execute()
                 )
-                failed += len(getattr(resp, "data", None) or chunk)
+                failed += _affected_count(resp)
             except Exception as e:
                 print(f"  [supabase] mark-fail failed: {e}", file=sys.stderr)
 
@@ -376,7 +442,11 @@ def main() -> int:
     if not resume:
         print("  [warn] no active resume — will rely on env override or fallback")
     candidate_location = _resolve_candidate_location(anthropic, resume_text)
-    print(f"  candidate location: {candidate_location!r}")
+    candidate_city, candidate_country = _split_city_country(candidate_location)
+    print(
+        f"  candidate location: {candidate_location!r}  "
+        f"(city={candidate_city!r}, country={candidate_country!r})"
+    )
 
     jobs = _fetch_unfiltered_jobs(sb, args.limit) if sb else []
     if not jobs:
@@ -387,12 +457,12 @@ def main() -> int:
     if args.dry:
         print("\n  [dry] sample prompt:")
         print("---")
-        print(_build_user_message(jobs[0], candidate_location)[:600])
+        print(_build_user_message(jobs[0], candidate_city, candidate_country)[:600])
         print("---")
         print(f"  [dry] would submit {len(jobs)} requests to Batch API")
         return 0
 
-    payload = _build_batch_requests(jobs, candidate_location)
+    payload = _build_batch_requests(jobs, candidate_city, candidate_country)
     batch = _submit_batch(anthropic, payload)
     if batch is None:
         return 4
@@ -455,6 +525,27 @@ def main() -> int:
         f"parse_failed={parse_failed}  errored={errored}  "
         f"input_tokens={input_tokens_total}  output_tokens={output_tokens_total}"
     )
+
+    # Audit H20: parse failures are silently added to pass_ids (fail-open),
+    # which is the right *per-row* policy — a single Haiku output blip
+    # shouldn't drop a legitimate posting. But if the model REGRESSES
+    # (e.g. starts wrapping every output in markdown), this masks the
+    # bug because every job slips through. Loudly flag when the parse-
+    # fail ratio crosses a threshold so it surfaces in Actions logs and
+    # the operator can investigate before the next batch burns budget.
+    PARSE_FAIL_RATIO_THRESHOLD = 0.05  # 5% — well above transient noise
+    total_results = len(pass_ids) + len(fail_records) + parse_failed + errored
+    if total_results > 0:
+        parse_fail_ratio = parse_failed / total_results
+        if parse_fail_ratio > PARSE_FAIL_RATIO_THRESHOLD:
+            print(
+                f"::warning::geo_filter parse_failed ratio "
+                f"{parse_fail_ratio:.1%} ({parse_failed}/{total_results}) "
+                f"exceeds threshold {PARSE_FAIL_RATIO_THRESHOLD:.1%}. "
+                f"Model output may be drifting — inspect batch {batch_id} "
+                f"and consider re-running once the regression is fixed.",
+                file=sys.stderr,
+            )
 
     passed_written, failed_written = _mark_jobs(sb, pass_ids, fail_records)
     print(f"  [writeback] {passed_written} passed  {failed_written} geo-rejected")

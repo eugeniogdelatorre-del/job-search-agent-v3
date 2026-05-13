@@ -4,7 +4,7 @@
 
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
 import { FilterBar } from '@/components/FilterBar'
 import { JobList, JobListSkeleton } from '@/components/JobList'
 import { StatsBar } from '@/components/StatsBar'
@@ -20,8 +20,8 @@ export default async function TodayPage({
 }: {
   searchParams: Record<string, string | string[] | undefined>
 }) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient()
+  const user = await getCurrentUser()  // Audit N-M3: cached per request
   if (!user) redirect('/login')
 
   const filters = parseFilters(searchParams)
@@ -83,10 +83,13 @@ export default async function TodayPage({
       <FilterBar hidePostedWithin />
 
       {/* Job grid — pre-fetched; Suspense wraps refetch on filter change.
-          requireScored hides cards the AI hasn't reached yet. The header
-          counter still displays the full indexed total above. */}
+          Audit H-4 (2026-05-13): removed `requireScored` so freshly-
+          scraped jobs (no match_score yet) still show up. The SQL sort
+          already puts scored rows first (match_score DESC NULLS LAST),
+          so unscored cards land at the bottom of the grid — a
+          "just scraped" tail rather than a blackout window. */}
       <Suspense fallback={<JobListSkeleton />}>
-        <JobList filters={filters} scopeSinceDays={1} limit={60} requireScored />
+        <JobList filters={filters} scopeSinceDays={1} limit={60} />
       </Suspense>
     </main>
   )

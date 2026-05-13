@@ -5,8 +5,8 @@
 import Link from 'next/link'
 import { JobGrid } from '@/components/JobGrid'
 import { queryJobs } from '@/lib/jobs-query'
-import { createClient } from '@/lib/supabase/server'
-import type { Filters } from '@/lib/filters'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
+import { FILTER_KEYS, type Filters } from '@/lib/filters'
 
 type Props = {
   filters: Filters
@@ -21,7 +21,7 @@ type Props = {
 }
 
 export async function JobList({ filters, scopeSinceDays, limit = 100, requireScored = false }: Props) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { rows, error } = await queryJobs({ filters, scopeSinceDays, limit, requireScored })
 
   if (error) {
@@ -37,7 +37,7 @@ export async function JobList({ filters, scopeSinceDays, limit = 100, requireSco
 
   // Build job_id → application_id map so SaveToTrackerButton shows correct state
   const savedMap = new Map<string, string>()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCurrentUser()  // Audit N-M3
   if (user && rows.length > 0) {
     const jobIds = rows.map((r) => r.id)
     const { data: apps } = await supabase
@@ -51,10 +51,13 @@ export async function JobList({ filters, scopeSinceDays, limit = 100, requireSco
   }
 
   if (rows.length === 0) {
-    const anyFiltersActive =
-      !!filters.function || !!filters.vertical || !!filters.seniority ||
-      !!filters.remote   || !!filters.q        || !!filters.salaryFloor ||
-      !!filters.matchMin || !!filters.postedWithin
+    // Audit L5: derive from FILTER_KEYS so adding a future filter
+    // automatically participates — previously a hand-built ||-chain
+    // would drift.
+    const anyFiltersActive = FILTER_KEYS.some((k) => {
+      const v = filters[k]
+      return v !== undefined && v !== null && v !== ''
+    })
 
     // Distinguish "filters too tight" from "nothing scored yet" — when the
     // page asks for scored-only, the user's mental model is "the AI hasn't

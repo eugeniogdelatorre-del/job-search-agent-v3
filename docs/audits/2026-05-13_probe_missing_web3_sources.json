@@ -1,0 +1,276 @@
+{
+  "verified": [
+    {
+      "name": "Bitstamp",
+      "url": "https://apply.workable.com/bitstamp",
+      "category": "CEX",
+      "ats": "workable",
+      "job_count": 0
+    },
+    {
+      "name": "Anchorage",
+      "url": "https://jobs.lever.co/anchorage",
+      "category": "Custody",
+      "ats": "lever",
+      "job_count": 73
+    },
+    {
+      "name": "MakerDAO",
+      "url": "https://apply.workable.com/makerdao",
+      "category": "DeFi",
+      "ats": "workable",
+      "job_count": 0
+    },
+    {
+      "name": "Sky",
+      "url": "https://apply.workable.com/sky",
+      "category": "DeFi",
+      "ats": "workable",
+      "job_count": 0
+    },
+    {
+      "name": "Compound",
+      "url": "https://jobs.ashbyhq.com/compound",
+      "category": "DeFi",
+      "ats": "ashby",
+      "job_count": 5
+    },
+    {
+      "name": "Curve",
+      "url": "https://apply.workable.com/curve",
+      "category": "DeFi",
+      "ats": "workable",
+      "job_count": 0
+    },
+    {
+      "name": "Symbiotic",
+      "url": "https://jobs.ashbyhq.com/symbiotic",
+      "category": "Restaking",
+      "ats": "ashby",
+      "job_count": 1
+    },
+    {
+      "name": "Babylon",
+      "url": "https://apply.workable.com/babylon",
+      "category": "Restaking",
+      "ats": "workable",
+      "job_count": 0
+    },
+    {
+      "name": "Frame",
+      "url": "https://apply.workable.com/frame",
+      "category": "Wallet",
+      "ats": "workable",
+      "job_count": 0
+    },
+    {
+      "name": "Magic",
+      "url": "https://boards.greenhouse.io/magic",
+      "category": "Infra",
+      "ats": "greenhouse",
+      "job_count": 0
+    },
+    {
+      "name": "Foundry",
+      "url": "https://boards.greenhouse.io/foundry",
+      "category": "Tools",
+      "ats": "greenhouse",
+      "job_count": 19
+    },
+    {
+      "name": "Safe",
+      "url": "https://jobs.lever.co/safe",
+      "category": "Wallet",
+      "ats": "lever",
+      "job_count": 11
+    },
+    {
+      "name": "Linea",
+      "url": "https://apply.workable.com/linea",
+      "category": "L2",
+      "ats": "workable",
+      "job_count": 0
+    },
+    {
+      "name": "Base",
+      "url": "https://jobs.ashbyhq.com/base",
+      "category": "L2",
+      "ats": "ashby",
+      "job_count": 11
+    },
+    {
+      "name": "Manta",
+      "url": "https://apply.workable.com/manta",
+      "category": "L2",
+      "ats": "workable",
+      "job_count": 0
+    },
+    {
+      "name": "Mode",
+      "url": "https://apply.workable.com/mode",
+      "category": "L2",
+      "ats": "workable",
+      "job_count": 0
+    },
+    {
+      "name": "Blast",
+      "url": "https://apply.workable.com/blast",
+      "category": "L2",
+      "ats": "workable",
+      "job_count": 11
+    },
+    {
+      "name": "Sei",
+      "url": "https://boards.greenhouse.io/sei",
+      "category": "L1",
+      "ats": "greenhouse",
+      "job_count": 0
+    },
+    {
+      "name": "Movement",
+      "url": "https://apply.workable.com/movement",
+      "category": "L1",
+      "ats": "workable",
+      "job_count": 0
+    },
+    {
+      "name": "Fuel",
+      "url": "https://jobs.lever.co/fuellabs",
+      "category": "L2",
+      "ats": "lever",
+      "job_count": 1
+    },
+    {
+      "name": "Pyth",
+      "url": "https://jobs.ashbyhq.com/pythnetwork",
+      "category": "Oracle",
+      "ats": "ashby",
+      "job_count": 1
+    },
+    {
+      "name": "Mina",
+      "url": "https://apply.workable.com/mina",
+      "category": "Privacy",
+      "ats": "workable",
+      "job_count": 0
+    }
+  ],
+  "rejected": [
+    {
+      "name": "MEXC",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Mountain Protocol",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Ondo",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Frax",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Yearn",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Pendle",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "GMX",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "dYdX",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Across",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "deBridge",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Avail",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "EigenLayer",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Polymer",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Karak",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Renzo",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "EtherFi",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Kelp",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Puffer",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Rabby",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Tenderly",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Infura",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Chainstack",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Crossmint",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Privy",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Snapshot",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Initia",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "RedStone",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "API3",
+      "reason": "no public board on any ATS"
+    },
+    {
+      "name": "Aleo",
+      "reason": "no public board on any ATS"
+    }
+  ]
+}

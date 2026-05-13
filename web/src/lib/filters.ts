@@ -4,12 +4,29 @@
 // D8: when salary_floor is set, jobs with null salary_max are STILL shown
 // (implemented as OR filter below).
 
-import type {
-  FunctionCategory,
-  RemoteStatus,
-  Seniority,
-  Vertical,
+import {
+  FUNCTION_CATEGORIES,
+  REMOTE_STATUSES,
+  SENIORITIES,
+  VERTICALS,
+  type FunctionCategory,
+  type RemoteStatus,
+  type Seniority,
+  type Vertical,
 } from '@/types/db'
+
+/**
+ * Audit H23: validate a URL-provided string against the runtime enum
+ * array before casting to the typed enum. Without this, `?function=foo`
+ * was cast to `FunctionCategory` and silently matched zero rows (no
+ * error, just confusing "0 results"). Returns undefined for unknown
+ * values so the corresponding `.eq()` filter is skipped entirely.
+ */
+function oneOf<T extends string>(v: string | undefined, allowed: readonly T[]): T | undefined {
+  return v && (allowed as readonly string[]).includes(v) ? (v as T) : undefined
+}
+
+const POSTED_WITHIN_VALUES = ['1d', '7d', '30d'] as const
 
 export type Filters = {
   function?: FunctionCategory
@@ -45,13 +62,13 @@ export function parseFilters(sp: Record<string, string | string[] | undefined>):
     return Number.isFinite(n) ? n : undefined
   }
   return {
-    function: get('function') as FunctionCategory | undefined,
-    vertical: get('vertical') as Vertical | undefined,
-    seniority: get('seniority') as Seniority | undefined,
-    remote: get('remote') as RemoteStatus | undefined,
+    function: oneOf(get('function'), FUNCTION_CATEGORIES),
+    vertical: oneOf(get('vertical'), VERTICALS),
+    seniority: oneOf(get('seniority'), SENIORITIES),
+    remote: oneOf(get('remote'), REMOTE_STATUSES),
     salaryFloor: num('salaryFloor'),
     matchMin: num('matchMin'),
-    postedWithin: get('postedWithin') as Filters['postedWithin'],
+    postedWithin: oneOf(get('postedWithin'), POSTED_WITHIN_VALUES),
     q: get('q'),
   }
 }

@@ -4,7 +4,7 @@
 // colored dot + mono label. Cards use the dark KanbanCard component.
 // dnd-kit drag-drop and notes dialog logic is unchanged from Phase 7.
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   DndContext,
   DragEndEvent,
@@ -17,7 +17,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { toast } from 'sonner'
-import { KanbanCard } from '@/components/KanbanCard'
+import { KanbanCard, KanbanCardOverlay } from '@/components/KanbanCard'
 import {
   Dialog,
   DialogContent,
@@ -122,10 +122,24 @@ export function KanbanBoard({ initial }: { initial: Application[] }) {
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
   )
 
-  const columns: Record<ApplicationStatus, Application[]> = {
-    saved: [], applied: [], interview: [], offer: [], rejected: [], stale: [],
-  }
-  for (const a of apps) columns[a.status].push(a)
+  // Audit H24: memoised bucketing.
+  //   - useMemo so we don't re-bucket every render (hundreds of apps × every
+  //     pointer event during drag was thousands of pushes per frame).
+  //   - Buckets initialised from APPLICATION_STATUSES so adding a future
+  //     status only needs one place updated.
+  //   - Unknown statuses fall back to `saved` (defensive — previously
+  //     ``columns[a.status].push(...)`` threw "Cannot read properties of
+  //     undefined" for any legacy row whose status wasn't in the initialiser).
+  const columns = useMemo(() => {
+    const buckets = Object.fromEntries(
+      APPLICATION_STATUSES.map((s) => [s, [] as Application[]])
+    ) as Record<ApplicationStatus, Application[]>
+    for (const a of apps) {
+      const bucket = buckets[a.status] ?? buckets.saved
+      bucket.push(a)
+    }
+    return buckets
+  }, [apps])
 
   function onDragStart(ev: DragStartEvent) {
     setActiveId(String(ev.active.id))
@@ -147,11 +161,23 @@ export function KanbanBoard({ initial }: { initial: Application[] }) {
       targetStatus === 'applied' && !moving.applied_at
         ? new Date().toISOString()
         : moving.applied_at
-    setApps((curr) =>
-      curr.map((a) =>
-        a.id === appId ? { ...a, status: targetStatus, applied_at: optimisticAppliedAt } : a
+    // Audit H25: also bump updated_at to now() so the moved card lands at
+    // the top of its destination column. Buckets are derived from `apps`
+    // by stable reduce, so without bumping the order the dragged card
+    // would appear at its OLD index inside the new column until the next
+    // refetch — feels broken visually.
+    const optimisticUpdatedAt = new Date().toISOString()
+    setApps((curr) => {
+      const next = curr.map((a) =>
+        a.id === appId
+          ? { ...a, status: targetStatus, applied_at: optimisticAppliedAt, updated_at: optimisticUpdatedAt }
+          : a,
       )
-    )
+      // Re-sort by updated_at desc so the moved card is at the top of
+      // its bucket (matches server-side ordering from /api/applications).
+      next.sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? ''))
+      return next
+    })
     try {
       const res = await fetch('/api/applications', {
         method: 'PATCH',
@@ -216,11 +242,25 @@ export function KanbanBoard({ initial }: { initial: Application[] }) {
           ))}
         </div>
         <DragOverlay>
-          {active ? <KanbanCard application={active} onEdit={() => {}} onDelete={undefined} /> : null}
+          {/* Audit M15: use the presentational variant — calling
+              <KanbanCard> here would register a second sortable with
+              the same id as the still-mounted source. */}
+          {active ? <KanbanCardOverlay application={active} /> : null}
         </DragOverlay>
       </DndContext>
 
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+      <Dialog
+        open={!!editing}
+        onOpenChange={(o) => {
+          if (!o) {
+            // Audit L22: clear the draft when the dialog closes so the
+            // NEXT app's dialog doesn't briefly flash the previous
+            // app's draft before openEdit() updates it.
+            setEditing(null)
+            setNotesDraft('')
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle style={{ fontFamily: 'var(--font-heading)', color: '#E8ECF0' }}>

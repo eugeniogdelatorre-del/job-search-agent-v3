@@ -10,21 +10,46 @@ name: pipeline
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: pipeline
   cancel-in-progress: false
 
 jobs:
   scrape:
+    # Audit H2: share stage-scrape with scrape.yml so a manual pipeline
+    # run can't run scrape concurrently with the scheduled cron.
+    concurrency:
+      group: stage-scrape
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
 
+      # Audit N-H6: parity with scrape.yml's pre-flight check.
+      - name: Check required secrets
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -z "${SUPABASE_URL:-}" ]         && missing+=("SUPABASE_URL")
+          [ -z "${SUPABASE_SERVICE_KEY:-}" ] && missing+=("SUPABASE_SERVICE_KEY")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}" >&2
+            exit 1
+          fi
+          echo "All required secrets present."
+
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.7"
           cache: "pip"
           cache-dependency-path: scraper/requirements.txt
 
@@ -39,6 +64,10 @@ jobs:
 
   classify:
     needs: [scrape]
+    # Audit H2: share stage-classify with classify.yml.
+    concurrency:
+      group: stage-classify
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     # 55 = 50 min poll cap (DEFAULT_POLL_MAX_SECONDS in _anthropic_batch.py)
     # + 5 min slack for write-back, dependency install, and pip cache miss.
@@ -47,9 +76,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Audit N-H6: parity with classify.yml's pre-flight check.
+      - name: Check required secrets
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -z "${SUPABASE_URL:-}" ]         && missing+=("SUPABASE_URL")
+          [ -z "${SUPABASE_SERVICE_KEY:-}" ] && missing+=("SUPABASE_SERVICE_KEY")
+          [ -z "${ANTHROPIC_API_KEY:-}" ]    && missing+=("ANTHROPIC_API_KEY")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}" >&2
+            exit 1
+          fi
+          echo "All required secrets present."
+
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.7"
           cache: "pip"
           cache-dependency-path: scraper/requirements.txt
 
@@ -66,19 +114,45 @@ jobs:
 
   geo-filter:
     needs: [classify]
-    # Run even if classify failed/timed out — geo_filter operates on rows
-    # that already have function_category, so a stalled classify only delays
-    # the latest 5–20 jobs, not the backlog of already-classified ones.
-    if: always()
+    # Audit H1: previously `if: always()` ran geo-filter regardless of
+    # classify's conclusion, which masked hard failures (the chain
+    # finished green even when the upstream stage produced no usable
+    # data). Switch to "stop on real failure, propagate cancellation".
+    # The operator can still drain the backlog manually via geo_filter.yml's
+    # workflow_dispatch — that path is explicitly opt-in.
+    if: ${{ !cancelled() && needs.classify.result == 'success' }}
+    # Audit H2: share stage-geo_filter with geo_filter.yml.
+    concurrency:
+      group: stage-geo_filter
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 55
 
     steps:
       - uses: actions/checkout@v4
 
+      # Audit N-H6: parity with geo_filter.yml's pre-flight check.
+      - name: Check required secrets
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -z "${SUPABASE_URL:-}" ]         && missing+=("SUPABASE_URL")
+          [ -z "${SUPABASE_SERVICE_KEY:-}" ] && missing+=("SUPABASE_SERVICE_KEY")
+          [ -z "${ANTHROPIC_API_KEY:-}" ]    && missing+=("ANTHROPIC_API_KEY")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}" >&2
+            exit 1
+          fi
+          echo "All required secrets present."
+
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.7"
           cache: "pip"
           cache-dependency-path: scraper/requirements.txt
 
@@ -95,19 +169,40 @@ jobs:
 
   cv-score:
     needs: [geo-filter]
-    # Same rationale as geo-filter — cv_score operates on already-classified
-    # + geo-filtered rows, so a stalled upstream stage only delays today's
-    # newcomers, not the backlog drain we care about right now.
-    if: always()
+    # See the audit H1 comment on geo-filter above. Same rationale.
+    if: ${{ !cancelled() && needs.geo-filter.result == 'success' }}
+    # Audit H2: share stage-cv_score with cv_score.yml.
+    concurrency:
+      group: stage-cv_score
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 55
 
     steps:
       - uses: actions/checkout@v4
 
+      # Audit N-H6: parity with cv_score.yml's pre-flight check.
+      - name: Check required secrets
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -z "${SUPABASE_URL:-}" ]         && missing+=("SUPABASE_URL")
+          [ -z "${SUPABASE_SERVICE_KEY:-}" ] && missing+=("SUPABASE_SERVICE_KEY")
+          [ -z "${ANTHROPIC_API_KEY:-}" ]    && missing+=("ANTHROPIC_API_KEY")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}" >&2
+            exit 1
+          fi
+          echo "All required secrets present."
+
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.7"
           cache: "pip"
           cache-dependency-path: scraper/requirements.txt
 
@@ -121,3 +216,20 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: python scraper/cv_score.py
+
+  # Audit H5: notify once if *any* stage fails. `if: failure()` becomes true
+  # when any direct prerequisite failed (skipped/cancelled don't count), so
+  # a clean cancel doesn't spam emails. Skipped stages from H1's
+  # success-only gating also won't trigger this — only real failures do.
+  notify_on_failure:
+    needs: [scrape, classify, geo-filter, cv-score]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send failure email via Resend
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 scraper/notify.py

@@ -63,15 +63,18 @@ def _retrying_adapter() -> HTTPAdapter:
     most flaps into invisible recoveries while staying under the
     REQUEST_TIMEOUT_SECONDS budget.
 
-    GET/HEAD/OPTIONS only — no parser issues mutating requests today,
-    but if one ever does we don't want the adapter silently double-
-    submitting.
+    Audit H21: POST is included because the only POST in this codebase
+    is Workday's search query (parsers/workday.py) — it's idempotent at
+    the protocol level (a search request, not a mutation). Without POST
+    here, every transient Workday 502/503/429 immediately failed the
+    source for the run, even though the body could safely be re-submitted.
+    DO NOT add a new POST that mutates state without revisiting this.
     """
     retry = Retry(
         total=3,
         backoff_factor=0.5,
         status_forcelist=(429, 500, 502, 503, 504),
-        allowed_methods=frozenset(["GET", "HEAD", "OPTIONS"]),
+        allowed_methods=frozenset(["GET", "HEAD", "OPTIONS", "POST"]),
         raise_on_status=False,
     )
     return HTTPAdapter(max_retries=retry)

@@ -88,20 +88,28 @@ def _split_company_location(s: str) -> tuple[str, str | None]:
 
 def _split_location_salary(s: str) -> tuple[str, tuple[int, int] | None]:
     """Pull a USD salary range out of the location tail if present."""
+    # Audit M18: lower bound was 10_000, which silently dropped legit
+    # WWR titles like "$5,000 - $25,000 USD" — the lower bound exists to
+    # reject "0-99" noise, not to enforce the score.py salary floor (that
+    # gate is separate and runs later). 1_000 is enough to keep the noise
+    # filter intact while letting micro-salaries survive.
+    SALARY_LO_FLOOR = 1_000
+    SALARY_HI_CAP   = 1_000_000
+
     # Pattern A: "$10,000 - $25,000 USD"
     m = re.search(r"\$?([\d,]+)\s*[-–]\s*\$?([\d,]+)\s*USD", s)
     if m:
         lo = int(m.group(1).replace(",", ""))
         hi = int(m.group(2).replace(",", ""))
         loc = re.sub(r"\$?[\d,]+\s*[-–]\s*\$?[\d,]+\s*USD\s*", "", s).strip() or "Anywhere in the World"
-        if 10_000 <= lo <= hi <= 1_000_000:
+        if SALARY_LO_FLOOR <= lo <= hi <= SALARY_HI_CAP:
             return (loc, (lo, hi))
     # Pattern B: "$100,000 or more USD"
     m = re.search(r"\$([\d,]+)\s*or\s*more\s*USD?", s)
     if m:
         lo = int(m.group(1).replace(",", ""))
         loc = re.sub(r"\$[\d,]+\s*or\s*more\s*USD?\s*", "", s).strip() or "Anywhere in the World"
-        if 10_000 <= lo <= 1_000_000:
+        if SALARY_LO_FLOOR <= lo <= SALARY_HI_CAP:
             return (loc, (lo, lo))
     return (s, None)
 

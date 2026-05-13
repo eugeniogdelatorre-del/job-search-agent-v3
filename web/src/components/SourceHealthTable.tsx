@@ -1,7 +1,13 @@
-﻿// SourceHealthTable — dark terminal table. Status dot: healthy=green,
-// failed=red. Sorted by today's job count (desc); failures float up on
-// ties so dead sources stay visible at the bottom-of-rank instead of
-// disappearing into a sea of zeroes.
+// SourceHealthTable — dark terminal table. Status dot: healthy=green,
+// failed=red. Sorted by Live count desc (most-productive sources first);
+// failures float up on ties so dead sources stay visible at the
+// bottom-of-rank instead of disappearing into a sea of zeroes.
+//
+// "New today" and "Live" come from the `jobs` table (active rows), NOT
+// from sources_health.jobs_found which counts *what the scraper returned*
+// (re-includes already-seen jobs each run). The two new columns answer
+// the operator-actionable questions: "did this source produce anything
+// new for me today?" and "is this source carrying any of my pipeline?"
 
 import { formatRelativeDate } from '@/lib/format'
 
@@ -14,45 +20,67 @@ type HealthRow = {
   duration_ms:   number | null
 }
 
-type DisplayRow = HealthRow & { jobs_today: number }
+type PerSource = Record<string, { new_today: number; live_total: number }>
 
-// "Today" = current UTC day. Cron runs are scheduled in UTC, so this
-// matches when scrapes actually fire and avoids "midnight resets in the
-// user's timezone but the scraper hasn't run yet" weirdness.
-function todayUtcStartIso(): string {
-  const now = new Date()
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
+type DisplayRow = HealthRow & {
+  new_today: number
+  live_total: number
 }
 
-export function SourceHealthTable({ rows }: { rows: HealthRow[] }) {
-  const todayStart = todayUtcStartIso()
-
+export function SourceHealthTable({
+  rows,
+  perSource = {},
+}: {
+  rows: HealthRow[]
+  perSource?: PerSource
+}) {
   // Latest run per source — drives Status / Latency / Last run / Error.
-  // Rows arrive ordered by run_at desc, so first-seen-wins picks latest.
+  // Audit L17: compare run_at and keep the max so the caller's order
+  // doesn't matter.
   const latest = new Map<string, HealthRow>()
   for (const r of rows) {
-    if (!latest.has(r.source)) latest.set(r.source, r)
+    const cur = latest.get(r.source)
+    if (!cur || r.run_at > cur.run_at) latest.set(r.source, r)
   }
 
-  // Today's total per source — sum jobs_found across every run logged
-  // since UTC midnight. A source with two scrapes today (e.g. matrix
-  // retry) gets both counted, which is what we want for "produced X
-  // jobs today" intuition.
-  const jobsToday = new Map<string, number>()
-  for (const r of rows) {
-    if (r.run_at < todayStart) continue
-    jobsToday.set(r.source, (jobsToday.get(r.source) ?? 0) + (r.jobs_found || 0))
-  }
+  // Combine the universe of sources from BOTH `sources_health` and `jobs`
+  // — a source can exist in one table but not the other (a source with
+  // live jobs but no recent run, or vice-versa). Take the union so
+  // neither perspective hides the other.
+  const allSources = new Set<string>([
+    ...Array.from(latest.keys()),
+    ...Object.keys(perSource),
+  ])
 
-  const list: DisplayRow[] = Array.from(latest.values())
-    .map((r) => ({ ...r, jobs_today: jobsToday.get(r.source) ?? 0 }))
+  const list: DisplayRow[] = Array.from(allSources)
+    .map((source) => {
+      const lastRun = latest.get(source)
+      const counts  = perSource[source] ?? { new_today: 0, live_total: 0 }
+      return {
+        source,
+        run_at:        lastRun?.run_at        ?? '',
+        jobs_found:    lastRun?.jobs_found    ?? 0,
+        success:       lastRun?.success       ?? true,
+        error_message: lastRun?.error_message ?? null,
+        duration_ms:   lastRun?.duration_ms   ?? null,
+        new_today:     counts.new_today,
+        live_total:    counts.live_total,
+      }
+    })
     .sort((a, b) => {
-      if (b.jobs_today !== a.jobs_today) return b.jobs_today - a.jobs_today
+      // Primary: Live total desc — most productive sources at the top.
+      if (b.live_total !== a.live_total) return b.live_total - a.live_total
+      // Secondary: New today desc — sources that fired today float up.
+      if (b.new_today !== a.new_today) return b.new_today - a.new_today
+      // Tertiary: failing sources float up over silent ones at the same count
+      // so dead boards stay visible.
       if (a.success !== b.success) return a.success ? 1 : -1
       return b.run_at.localeCompare(a.run_at)
     })
 
   const failing = list.filter((r) => !r.success).length
+  const totalNewToday   = list.reduce((acc, r) => acc + r.new_today, 0)
+  const totalLive       = list.reduce((acc, r) => acc + r.live_total, 0)
 
   if (list.length === 0) {
     return (
@@ -74,7 +102,7 @@ export function SourceHealthTable({ rows }: { rows: HealthRow[] }) {
       <div className="flex items-baseline justify-between px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #1E2330' }}>
         <h2 className="font-heading font-bold text-sm" style={{ color: '#E8ECF0' }}>Source health</h2>
         <p className="font-mono text-[10px]" style={{ color: '#6B7A99' }}>
-          {list.length} sources · {failing} failing
+          {list.length} sources · {failing} failing · {totalNewToday} new today · {totalLive} live total
         </p>
       </div>
 
@@ -83,7 +111,7 @@ export function SourceHealthTable({ rows }: { rows: HealthRow[] }) {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              {['Source', 'Status', 'Jobs today', 'Latency', 'Last run', 'Error'].map((h) => (
+              {['Source', 'Status', 'New today', 'Live', 'Latency', 'Last run', 'Error'].map((h) => (
                 <th
                   key={h}
                   className="px-4 py-2 text-left font-mono text-[10px] uppercase tracking-wider"
@@ -117,16 +145,30 @@ export function SourceHealthTable({ rows }: { rows: HealthRow[] }) {
                     </span>
                   </div>
                 </td>
+                {/* New today — first_seen_at >= UTC midnight.
+                    Highlighted in cyan when > 0, dim when 0. */}
+                <td
+                  className="px-4 py-2.5 font-mono text-[11px] tabular-nums"
+                  style={{ color: r.new_today > 0 ? '#00D4FF' : '#3A4460' }}
+                >
+                  {r.new_today > 0 ? `+${r.new_today}` : '0'}
+                </td>
+                {/* Live total — is_active=true. The "what's actually
+                    contributing to my pipeline right now" number. */}
                 <td className="px-4 py-2.5 font-mono text-[11px] tabular-nums" style={{ color: '#E8ECF0' }}>
-                  {r.jobs_today}
+                  {r.live_total}
                 </td>
                 <td className="px-4 py-2.5 font-mono text-[11px] tabular-nums" style={{ color: '#6B7A99' }}>
                   {r.duration_ms ? `${(r.duration_ms / 1000).toFixed(1)}s` : '—'}
                 </td>
                 <td className="px-4 py-2.5 font-mono text-[10px]" style={{ color: '#3A4460' }}>
-                  {formatRelativeDate(r.run_at)}
+                  {r.run_at ? formatRelativeDate(r.run_at) : '—'}
                 </td>
-                <td className="px-4 py-2.5 font-mono text-[10px] max-w-[280px] truncate" style={{ color: '#3A4460' }}>
+                <td
+                  className="px-4 py-2.5 font-mono text-[10px] max-w-[280px] truncate"
+                  style={{ color: '#3A4460' }}
+                  title={r.error_message ?? ''}
+                >
                   {r.error_message ?? ''}
                 </td>
               </tr>

@@ -59,8 +59,16 @@ def parse(session: requests.Session, source: dict) -> list[dict]:
             detail_resp = session.get(detail_url, timeout=REQUEST_TIMEOUT_SECONDS)
             if detail_resp.status_code == 200:
                 detail = (detail_resp.json() or {}).get("result", {}).get("jobOpening") or {}
-        except Exception:
-            pass
+        except Exception as e:
+            # Audit L10: previously this swallowed silently, so a network
+            # outage or schema rename produced description-less rows
+            # invisible to debugging. Log to stderr; we still degrade
+            # gracefully (the job is emitted with title only).
+            import sys as _sys
+            print(
+                f"  [bamboohr] detail fetch failed for {slug}/{job_id}: {e}",
+                file=_sys.stderr,
+            )
 
         if not detail:
             out.append({

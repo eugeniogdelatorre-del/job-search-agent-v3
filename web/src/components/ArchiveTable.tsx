@@ -3,21 +3,22 @@
 // Pagination uses Tailwind hover classes instead.
 
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { ExternalLink } from 'lucide-react'
 import { MatchBadge } from '@/components/MatchBadge'
 import { TagPill } from '@/components/TagPill'
 import { SaveToTrackerButton } from '@/components/SaveToTrackerButton'
 import { queryJobs } from '@/lib/jobs-query'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
 import { formatRelativeDate, formatSalary } from '@/lib/format'
 import { filtersToSearchParams, type Filters } from '@/lib/filters'
 
 const PAGE_SIZE = 50
 
-type Props = { filters: Filters; page: number }
+type Props = { filters: Filters; page: number; includeRejected?: boolean }
 
-export async function ArchiveTable({ filters, page }: Props) {
-  const supabase = createClient()
+export async function ArchiveTable({ filters, page, includeRejected = false }: Props) {
+  const supabase = await createClient()
   const offset = (page - 1) * PAGE_SIZE
   const { rows, total, error } = await queryJobs({
     filters,
@@ -25,6 +26,7 @@ export async function ArchiveTable({ filters, page }: Props) {
     limit: PAGE_SIZE,
     offset,
     withCount: true,
+    includeRejected,
   })
 
   if (error) {
@@ -35,9 +37,20 @@ export async function ArchiveTable({ filters, page }: Props) {
     )
   }
 
+  // Audit M14: redirect to the last valid page if the requested page is
+  // past the total. Previously rendered "No jobs match these filters"
+  // even when page 1 had results, which read as a filter bug.
+  if (rows.length === 0 && page > 1 && total && total > 0) {
+    const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE))
+    const sp = filtersToSearchParams(filters)
+    if (lastPage > 1) sp.set('page', String(lastPage))
+    const qs = sp.toString()
+    redirect(qs ? `/archive?${qs}` : '/archive')
+  }
+
   // Build job_id → application_id map
   const savedMap = new Map<string, string>()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCurrentUser()  // Audit N-M3
   if (user && rows.length > 0) {
     const jobIds = rows.map((r) => r.id)
     const { data: apps } = await supabase

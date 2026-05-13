@@ -7,7 +7,7 @@
 // the caller didn't send one.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
 import {
   APPLICATION_STATUSES,
   type ApplicationStatus,
@@ -34,10 +34,8 @@ type PatchBody = {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const supabase = await createClient()
+  const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
 
   let body: CreateBody
@@ -55,13 +53,56 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // Audit M11 + N-M2: validate snapshot strings. apply_url_snapshot must
+  // be http(s) so a malicious save can't slip `javascript:` / `data:` /
+  // `file:` into the kanban — these would fire when the UI later renders
+  // them as a bare `<a href>`. Reject URLs that embed credentials
+  // (``https://user:pass@host``) so the Referer header doesn't leak them
+  // when the kanban link is clicked. Length caps prevent DB bloat.
+  const snapshotErrors: string[] = []
+  if (title.length > 500) snapshotErrors.push('job_title_snapshot > 500')
+  const apply = (body.apply_url_snapshot ?? '').trim()
+  if (apply) {
+    try {
+      const parsed = new URL(apply)
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        snapshotErrors.push('apply_url_snapshot must be http(s)')
+      }
+      if (parsed.username || parsed.password) {
+        snapshotErrors.push('apply_url_snapshot must not embed credentials')
+      }
+    } catch {
+      snapshotErrors.push('apply_url_snapshot is not a valid URL')
+    }
+  }
+  if (apply.length > 2000) snapshotErrors.push('apply_url_snapshot > 2000')
+  if ((body.company_snapshot ?? '').length > 300) snapshotErrors.push('company_snapshot > 300')
+  if ((body.source_snapshot ?? '').length > 100) snapshotErrors.push('source_snapshot > 100')
+  if ((body.notes ?? '').length > 5000) snapshotErrors.push('notes > 5000')
+  if (snapshotErrors.length > 0) {
+    return NextResponse.json({ error: snapshotErrors.join('; ') }, { status: 400 })
+  }
+
   const status: ApplicationStatus = body.status ?? 'saved'
   if (!APPLICATION_STATUSES.includes(status)) {
     return NextResponse.json({ error: 'invalid status' }, { status: 400 })
   }
 
-  // If the user already saved this job, just return it — no dupes.
+  // Audit H13: race-safe idempotency. Previously this did SELECT then
+  // INSERT, and two concurrent saves could both miss the existing row
+  // and create duplicates. Now we use INSERT and catch the unique-
+  // violation error from the partial unique index defined in
+  // web/sql/002_applications_constraints.sql. If that index isn't
+  // deployed yet, behavior degrades to the previous (racy) check-and-
+  // insert — see the pre-check below.
+  //
+  // applied_at is no longer stamped here — the BEFORE-UPDATE/INSERT
+  // trigger in the same migration handles it deterministically (H14).
   if (body.job_id) {
+    // Defence-in-depth pre-check: serves as the only protection in
+    // environments where the migration hasn't been applied yet; once
+    // the index is in place, the catch below makes this strictly
+    // optional.
     const { data: existing } = await supabase
       .from('applications')
       .select('*')
@@ -73,8 +114,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const applied_at = status === 'applied' ? new Date().toISOString() : null
-
   const { data: inserted, error } = await supabase
     .from('applications')
     .insert({
@@ -85,25 +124,55 @@ export async function POST(req: NextRequest) {
       apply_url_snapshot: body.apply_url_snapshot ?? null,
       source_snapshot: body.source_snapshot ?? null,
       status,
-      applied_at,
       notes: body.notes ?? null,
     })
     .select('*')
     .single()
 
-  if (error || !inserted) {
-    return NextResponse.json(
-      { error: `insert failed: ${error?.message ?? 'unknown'}` },
-      { status: 500 }
-    )
+  if (error) {
+    // Postgres unique_violation = 23505. PostgREST exposes it via
+    // ``error.code`` on supabase-js. Race-loser: fetch and return the
+    // row the race-winner inserted.
+    if (error.code === '23505' && body.job_id) {
+      // Audit N-H3: PostgREST's SELECT may run on a different connection
+      // from the INSERT, so under read-committed the race-winner's row
+      // might not be visible yet on the SELECT's connection. Short retry
+      // absorbs the lag (~50ms is plenty for Supabase's intra-region
+      // pooler latency).
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 50))
+        const { data: existing } = await supabase
+          .from('applications')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('job_id', body.job_id)
+          .maybeSingle()
+        if (existing) {
+          return NextResponse.json({ application: existing, duplicate: true })
+        }
+      }
+      console.error(
+        '[api/applications] 23505 but re-fetch empty after retries',
+        { user_id: user.id, job_id: body.job_id },
+      )
+    }
+    // Audit M6: don't leak PostgREST error internals to clients.
+    console.error('[api/applications] insert failed:', error.message, error.code)
+    return NextResponse.json({ error: 'insert failed' }, { status: 500 })
+  }
+  if (!inserted) {
+    console.error('[api/applications] insert returned no row')
+    return NextResponse.json({ error: 'insert failed' }, { status: 500 })
   }
 
-  return NextResponse.json({ application: inserted, duplicate: false })
+  // Audit L14: 201 on actual create (REST convention). The duplicate-
+  // branch above stays on 200 because the row already existed.
+  return NextResponse.json({ application: inserted, duplicate: false }, { status: 201 })
 }
 
 export async function DELETE(req: NextRequest) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient()
+  const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
@@ -116,15 +185,17 @@ export async function DELETE(req: NextRequest) {
     .eq('id', id)
     .eq('user_id', user.id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    // Audit N-M1: don't leak PostgREST error message.
+    console.error('[api/applications] delete failed:', error.message, error.code)
+    return NextResponse.json({ error: 'delete failed' }, { status: 500 })
+  }
   return NextResponse.json({ ok: true })
 }
 
 export async function PATCH(req: NextRequest) {
-  const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const supabase = await createClient()
+  const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
 
   let body: PatchBody
@@ -141,25 +212,18 @@ export async function PATCH(req: NextRequest) {
   }
 
   const update: Record<string, unknown> = {}
-  if (typeof body.status !== 'undefined') {
-    update.status = body.status
-    // First time we see status === 'applied', stamp applied_at if the
-    // caller didn't send one explicitly. We only stamp; we don't clobber
-    // an earlier applied_at when the user moves forward to interview.
-    if (body.status === 'applied' && typeof body.applied_at === 'undefined') {
-      const { data: current } = await supabase
-        .from('applications')
-        .select('applied_at')
-        .eq('id', body.id)
-        .eq('user_id', user.id)
-        .maybeSingle()
-      if (current && !current.applied_at) {
-        update.applied_at = new Date().toISOString()
-      }
-    }
-  }
+  if (typeof body.status !== 'undefined') update.status = body.status
   if (typeof body.notes !== 'undefined') update.notes = body.notes
-  if (typeof body.applied_at !== 'undefined') update.applied_at = body.applied_at
+  // Audit N-H4: do NOT honor client-supplied applied_at on PATCH. The
+  // DB trigger (web/sql/002_applications_constraints.sql) auto-stamps
+  // applied_at on the first transition into status='applied'. Allowing
+  // the client to set or null-out the field would let users back-date,
+  // future-date, or erase the audit trail. If a legitimate use case
+  // ever arises (manual back-dating after the fact), add it via a
+  // separate, deliberate endpoint or a server-side validated path.
+  //
+  // Previous H14 comment retained for context: stamping in Postgres is
+  // atomic per UPDATE and never overwrites an existing stamp.
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'no fields to update' }, { status: 400 })
@@ -174,10 +238,9 @@ export async function PATCH(req: NextRequest) {
     .single()
 
   if (error || !updated) {
-    return NextResponse.json(
-      { error: `update failed: ${error?.message ?? 'unknown'}` },
-      { status: 500 }
-    )
+    // Audit M6: don't leak PostgREST internals.
+    console.error('[api/applications] patch failed:', error?.message)
+    return NextResponse.json({ error: 'update failed' }, { status: 500 })
   }
 
   return NextResponse.json({ application: updated })

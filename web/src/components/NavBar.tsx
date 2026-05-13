@@ -68,19 +68,10 @@ export function NavBar({ email }: { email?: string | null }) {
             <Link
               key={l.href}
               href={l.href}
-              className="relative flex items-center h-14 px-3.5 text-[13px] font-medium transition-colors duration-150"
+              className={`nav-link ${isActive ? 'is-active' : ''} relative flex items-center h-14 px-3.5 text-[13px] font-medium`}
               style={{
-                color: isActive ? '#E8ECF0' : '#6B7A99',
                 letterSpacing: '0.01em',
                 borderBottom: isActive ? '2px solid #00D4FF' : '2px solid transparent',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive)
-                  (e.currentTarget as HTMLElement).style.color = '#A0AABB'
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive)
-                  (e.currentTarget as HTMLElement).style.color = '#6B7A99'
               }}
             >
               {l.label}
@@ -99,22 +90,7 @@ export function NavBar({ email }: { email?: string | null }) {
         {email && (
           <button
             onClick={signOut}
-            className="font-mono text-[12px] font-medium rounded-[6px] px-3 py-[5px] transition-colors duration-150"
-            style={{
-              background: 'transparent',
-              border: '1px solid #252D40',
-              color: '#A0AABB',
-            }}
-            onMouseEnter={(e) => {
-              const el = e.currentTarget as HTMLButtonElement
-              el.style.borderColor = '#6B7A99'
-              el.style.color       = '#E8ECF0'
-            }}
-            onMouseLeave={(e) => {
-              const el = e.currentTarget as HTMLButtonElement
-              el.style.borderColor = '#252D40'
-              el.style.color       = '#A0AABB'
-            }}
+            className="signout-btn font-mono text-[12px] font-medium rounded-[6px] px-3 py-[5px] bg-transparent"
           >
             Sign out
           </button>

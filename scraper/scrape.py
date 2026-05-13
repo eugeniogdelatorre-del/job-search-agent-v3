@@ -46,17 +46,22 @@ from scraper.parsers import (
     bamboohr,
     cryptojobslist,
     generic,
+    getonbrd,
     greenhouse,
     lever,
     teamtailor,
     web3career,
     weworkremotely,
+    workable,
     workday,
 )
 from scraper.parsers.base import make_session
 from scraper.score import DEFAULT_CONFIG, score_job
 
 # Parser registry — ordered. First `can_parse(source)` match wins.
+# workable comes before generic so apply.workable.com URLs aren't sent
+# through the generic HTML-fallback path. It needs to be after the more
+# specific ATS parsers (none of which match Workable URLs).
 PARSERS = [
     greenhouse,
     lever,
@@ -64,14 +69,19 @@ PARSERS = [
     workday,
     bamboohr,
     teamtailor,
+    workable,
     cryptojobslist,
     web3career,
     weworkremotely,
+    getonbrd,  # LATAM aggregator — pulls 500+ jobs per run
     generic,
 ]
 
 DELAY_BETWEEN_REQUESTS_SECONDS = 1
-SUSPENSION_THRESHOLD = 5  # consecutive failures before a source is suspended
+# Audit L1: SUSPENSION_THRESHOLD removed — the live value is
+# SUSPEND_AFTER_CONSECUTIVE_FAILURES in supabase_client.py (=7). The
+# unused 5 here was misleading anyone reading scrape.py expecting it to
+# be the source of truth.
 
 WEB3_AGGREGATOR_NAMES = {"cryptojobslist", "web3.career", "cryptocurrencyjobs"}
 BROAD_BOARD_CATEGORIES = {"Remote_Board", "Board"}
@@ -112,7 +122,9 @@ def _enrich(job: dict, source: dict, cjl_boost: set[str]) -> dict:
 
     return {
         **job,
-        "dedup_key": make_dedup_key(job.get("title"), job.get("company")),
+        "dedup_key": make_dedup_key(
+            job.get("title"), job.get("company"), job.get("location")
+        ),
         "source": source.get("name") or "unknown",
         "source_tier": tier,
         "source_url": job.get("source_url") or source.get("url"),

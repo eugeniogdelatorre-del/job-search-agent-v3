@@ -300,6 +300,36 @@
           "name": "Dusk Network",
           "url": "https://dusk.network/careers",
           "category": "L1"
+        },
+        {
+          "name": "Linea",
+          "url": "https://apply.workable.com/linea",
+          "category": "L2"
+        },
+        {
+          "name": "Manta",
+          "url": "https://apply.workable.com/manta",
+          "category": "L2"
+        },
+        {
+          "name": "Mode",
+          "url": "https://apply.workable.com/mode",
+          "category": "L2"
+        },
+        {
+          "name": "Blast",
+          "url": "https://apply.workable.com/blast",
+          "category": "L2"
+        },
+        {
+          "name": "Sei",
+          "url": "https://boards.greenhouse.io/sei",
+          "category": "L1"
+        },
+        {
+          "name": "Movement",
+          "url": "https://apply.workable.com/movement",
+          "category": "L1"
         }
       ]
     },
@@ -656,6 +686,56 @@
           "name": "Quant Network",
           "url": "https://quant.network/careers",
           "category": "Infra"
+        },
+        {
+          "name": "Bitstamp",
+          "url": "https://apply.workable.com/bitstamp",
+          "category": "CEX"
+        },
+        {
+          "name": "Anchorage",
+          "url": "https://jobs.lever.co/anchorage",
+          "category": "Custody"
+        },
+        {
+          "name": "MakerDAO",
+          "url": "https://apply.workable.com/makerdao",
+          "category": "DeFi"
+        },
+        {
+          "name": "Sky",
+          "url": "https://apply.workable.com/sky",
+          "category": "DeFi"
+        },
+        {
+          "name": "Curve",
+          "url": "https://apply.workable.com/curve",
+          "category": "DeFi"
+        },
+        {
+          "name": "Symbiotic",
+          "url": "https://jobs.ashbyhq.com/symbiotic",
+          "category": "Restaking"
+        },
+        {
+          "name": "Babylon",
+          "url": "https://apply.workable.com/babylon",
+          "category": "Restaking"
+        },
+        {
+          "name": "Pyth",
+          "url": "https://jobs.ashbyhq.com/pythnetwork",
+          "category": "Oracle"
+        },
+        {
+          "name": "Across (Risk Labs)",
+          "url": "https://jobs.ashbyhq.com/risklabs",
+          "category": "Bridge"
+        },
+        {
+          "name": "Puffer Finance",
+          "url": "https://apply.workable.com/puffer-finance",
+          "category": "Restaking"
         }
       ]
     },
@@ -853,7 +933,6 @@
           "url": "https://jobs.zama.org",
           "category": "Privacy"
         },
-
         {
           "name": "Ankr",
           "url": "https://ankr-pbc.breezy.hr",
@@ -1013,6 +1092,31 @@
           "name": "e.Cash",
           "url": "https://e.cash/careers",
           "category": "L1"
+        },
+        {
+          "name": "Frame",
+          "url": "https://apply.workable.com/frame",
+          "category": "Wallet"
+        },
+        {
+          "name": "Magic",
+          "url": "https://boards.greenhouse.io/magic",
+          "category": "Infra"
+        },
+        {
+          "name": "Safe",
+          "url": "https://jobs.lever.co/safe",
+          "category": "Wallet"
+        },
+        {
+          "name": "Mina",
+          "url": "https://apply.workable.com/mina",
+          "category": "Privacy"
+        },
+        {
+          "name": "Chainstack",
+          "url": "https://chainstack.bamboohr.com/careers",
+          "category": "Infra"
         }
       ]
     },
@@ -1050,7 +1154,6 @@
           "url": "https://remoteok.com/remote-crypto-jobs",
           "category": "Remote_Board"
         },
-
         {
           "name": "RemoteLeaf",
           "url": "https://remoteleaf.com/",
@@ -1090,6 +1193,11 @@
           "name": "Work at a Startup",
           "url": "https://www.workatastartup.com/companies?demographic=any&hasEquity=any&hasSalary=any&industry=any&interviewProcess=any&jobType=any&layout=list-compact&remote=only&remote=yes&sortBy=created_desc&tab=any&usVisaNotRequired=true",
           "category": "Board"
+        },
+        {
+          "name": "Get on Board",
+          "url": "https://www.getonbrd.com/jobs",
+          "category": "LATAM_Board"
         }
       ]
     },
@@ -1754,7 +1862,6 @@
           "url": "https://job-boards.greenhouse.io/nansen",
           "category": "Analytics"
         },
-
         {
           "name": "Nomad Bridge",
           "url": "https://boards.greenhouse.io/nomad",

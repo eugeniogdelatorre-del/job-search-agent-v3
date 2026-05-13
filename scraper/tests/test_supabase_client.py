@@ -1,6 +1,7 @@
 """Tests for supabase_client fetch_suspended_sources and update_source_state."""
 from unittest.mock import MagicMock, call
 
+import scraper.supabase_client as sc
 from scraper.supabase_client import fetch_suspended_sources, update_source_state
 
 
@@ -8,8 +9,14 @@ from scraper.supabase_client import fetch_suspended_sources, update_source_state
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_select_client(data):
-    """Return a mock Supabase client whose SELECT chain returns the given data."""
+def _make_select_client(data, *, rpc_raises_missing: bool = True):
+    """Return a mock Supabase client.
+
+    By default ``client.rpc(...).execute()`` raises a "function not found"
+    error so update_source_state falls through to the legacy read-modify-
+    write path the tests inspect. Pass ``rpc_raises_missing=False`` to
+    exercise the RPC happy path.
+    """
     client = MagicMock()
     resp = MagicMock()
     resp.data = data
@@ -19,7 +26,22 @@ def _make_select_client(data):
     client.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value = resp
     # upsert chain (return value doesn't matter much)
     client.table.return_value.upsert.return_value.execute.return_value = MagicMock()
+    if rpc_raises_missing:
+        # Simulate the bump_source_state RPC not being deployed yet.
+        # Production code falls through to the legacy upsert path.
+        client.rpc.return_value.execute.side_effect = Exception(
+            "Could not find the function public.bump_source_state in the schema cache "
+            "(PGRST202)"
+        )
+    else:
+        client.rpc.return_value.execute.return_value = MagicMock()
     return client
+
+
+def _reset_rpc_warn_flag():
+    """Tests run in arbitrary order; reset the one-shot warning so the
+    'rpc missing' message is observed exactly when the test expects."""
+    sc._RPC_MISSING_WARNED = False
 
 
 # ---------------------------------------------------------------------------
@@ -120,9 +142,49 @@ def test_update_7th_failure_suspends():
 
 def test_update_new_source_first_failure():
     """When no prior row exists, first failure creates row with consecutive_failures=1."""
+    _reset_rpc_warn_flag()
     client = _make_select_client(None)  # data=None simulates no existing row
     update_source_state(client, "brand_new_source", success=False)
     row = client.table.return_value.upsert.call_args[0][0]
     assert row["consecutive_failures"] == 1
     assert row["suspended"] is False
     assert row["source_name"] == "brand_new_source"
+
+
+# ---------------------------------------------------------------------------
+# RPC happy path (audit N-H2 / N-M4)
+# ---------------------------------------------------------------------------
+
+def test_update_uses_rpc_when_available():
+    """When the bump_source_state RPC is deployed, update_source_state
+    calls it and does NOT fall back to the legacy upsert path."""
+    _reset_rpc_warn_flag()
+    client = _make_select_client({"consecutive_failures": 2, "suspended": False},
+                                  rpc_raises_missing=False)
+    update_source_state(client, "src_rpc", success=False)
+
+    # RPC was called with the expected payload.
+    rpc_call = client.rpc.call_args
+    assert rpc_call is not None, "rpc was never called"
+    assert rpc_call[0][0] == "bump_source_state"
+    args = rpc_call[0][1]
+    assert args["p_source_name"] == "src_rpc"
+    assert args["p_success"] is False
+    assert isinstance(args["p_suspend_threshold"], int)
+
+    # Legacy upsert path was NOT exercised.
+    assert client.table.return_value.upsert.call_args is None, \
+        "upsert path should be skipped when RPC succeeds"
+
+
+def test_update_falls_back_when_rpc_missing():
+    """If the RPC isn't deployed yet, fallback to legacy upsert still works."""
+    _reset_rpc_warn_flag()
+    client = _make_select_client({"consecutive_failures": 0, "suspended": False})
+    update_source_state(client, "src_legacy", success=False)
+    # RPC was attempted...
+    assert client.rpc.call_args is not None
+    # ...and the legacy upsert ran as fallback.
+    upsert_call = client.table.return_value.upsert.call_args
+    assert upsert_call is not None
+    assert upsert_call[0][0]["consecutive_failures"] == 1

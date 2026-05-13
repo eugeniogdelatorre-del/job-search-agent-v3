@@ -1,17 +1,26 @@
 ﻿// /apply — kanban tracker. NavBar is in layout.tsx.
 // Snapshot fields survive 60-day job retention sweep.
 
-import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
 import { KanbanBoard } from '@/components/KanbanBoard'
 import type { Application } from '@/types/db'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ApplyPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
+
+  // Audit C11 + N-M3: gate on a logged-in user before querying (parity
+  // with sibling pages). getCurrentUser() is cached per request so it
+  // shares the round-trip with any other call site in this render.
+  const user = await getCurrentUser()
+  if (!user) redirect('/login')
+
   const { data, error } = await supabase
     .from('applications')
     .select('*')
+    .eq('user_id', user.id)
     .order('updated_at', { ascending: false })
 
   const apps = (data ?? []) as Application[]

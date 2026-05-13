@@ -4,7 +4,7 @@
 // Pass savedApplicationId (non-null) when the server already knows the job
 // is saved. Clicking again calls DELETE to unsave.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
 type Props = {
@@ -22,6 +22,14 @@ export function SaveToTrackerButton({
 }: Props) {
   const [appId, setAppId] = useState<string | null>(savedApplicationId ?? null)
   const [busy,  setBusy]  = useState(false)
+
+  // Audit M12: ``useState`` is initial-only — a subsequent server render
+  // that passes a different ``savedApplicationId`` (e.g. kanban deleted
+  // the application, then router.refresh() re-rendered the parent) used
+  // to leave this component holding the stale id. Sync explicitly.
+  useEffect(() => {
+    setAppId(savedApplicationId ?? null)
+  }, [savedApplicationId])
 
   async function toggle() {
     if (busy) return

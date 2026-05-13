@@ -1,7 +1,7 @@
 ﻿// /resume — CV upload + version list + activate. NavBar is in layout.tsx.
 
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
 import { ResumeUploader } from '@/components/ResumeUploader'
 import { ActivateResumeButton, RescoreButton } from '@/components/ActivateResumeButton'
 import { DeleteResumeButton } from '@/components/DeleteResumeButton'
@@ -18,8 +18,8 @@ type ResumeRow = {
 }
 
 export default async function ResumePage() {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient()
+  const user = await getCurrentUser()  // Audit N-M3
   if (!user) redirect('/login')
 
   const { data, error } = await supabase

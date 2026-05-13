@@ -109,7 +109,9 @@ def parse(session: requests.Session, source: dict) -> list[dict]:
 
         location = post.get("locationName") or post.get("location") or None
         description = post.get("descriptionPlain") or post.get("descriptionHtml") or ""
-        if description.startswith("<"):
+        # Audit L8: ``startswith("<")`` missed HTML with a BOM, whitespace,
+        # or newline prefix. Strip leading whitespace before testing.
+        if description.lstrip().startswith("<"):
             import re as _re
             description = _re.sub(r"<[^>]+>", " ", description)
             description = _re.sub(r"\s+", " ", description)

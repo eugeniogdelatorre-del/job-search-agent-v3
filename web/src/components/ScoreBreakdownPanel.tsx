@@ -54,6 +54,12 @@ export function ScoreBreakdownPanel({ score }: Props) {
             const dim = dims[key as DimensionKey]
             if (!dim) return null
             const ratio = dim.score / max
+            // Audit L23: cap the bar at 100% so an older row that
+            // happened to score above the current `max` doesn't overflow
+            // its parent. The label still shows the raw score, so the
+            // operator can see "scored 22/20" intentionally — only the
+            // visual bar width is clamped.
+            const barRatio = Math.max(0, Math.min(1, ratio))
             return (
               <div key={key} className="flex items-center gap-2 py-0.5">
                 <span className="font-mono text-[10px] w-24 shrink-0" style={{ color: '#6B7A99' }}>
@@ -68,7 +74,7 @@ export function ScoreBreakdownPanel({ score }: Props) {
                 <div className="flex-1 h-1 rounded-full" style={{ background: '#1E2330' }}>
                   <div
                     className="h-1 rounded-full bg-[#00D4FF]"
-                    style={{ width: `${(ratio * 100).toFixed(1)}%` }}
+                    style={{ width: `${(barRatio * 100).toFixed(1)}%` }}
                   />
                 </div>
               </div>

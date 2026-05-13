@@ -14,10 +14,16 @@ on:
     - cron: "0 22 * * 0"
   workflow_dispatch:
     inputs:
+      # Audit M22: typed boolean — fixes the previous string `== "true"`
+      # comparison that silently ignored "True"/"TRUE"/"1".
       dry:
-        description: "Set to 'true' to print HTML without sending"
+        description: "Print HTML without sending"
         required: false
-        default: ""
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 jobs:
   send:
@@ -29,7 +35,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.7"
           cache: "pip"
           cache-dependency-path: scraper/requirements.txt
 
@@ -42,9 +48,25 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          # Quoted as data via env var — never interpolate ${{ inputs.* }}
+          # directly into a `run:` block. See SECURITY note in repo audit.
+          DRY_INPUT: ${{ github.event.inputs.dry }}
         run: |
-          if [ "${{ github.event.inputs.dry }}" = "true" ]; then
+          if [ "$DRY_INPUT" = "true" ]; then
             python scraper/weekly_summary.py --dry
           else
             python scraper/weekly_summary.py
           fi
+
+  notify_on_failure:
+    needs: [send]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send failure email via Resend
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 scraper/notify.py

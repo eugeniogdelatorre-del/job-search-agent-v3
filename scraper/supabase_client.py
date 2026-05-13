@@ -119,22 +119,83 @@ def update_source_state(client, source_name: str, success: bool) -> None:
 
     On the 7th consecutive failure the source is marked suspended=true.
     On any success the counter resets and suspended is cleared.
-    Uses upsert so the row is created on first encounter.
+
+    Audit N-H2: now calls the ``bump_source_state`` Postgres function
+    (deployed via ``scraper/sql/001_source_states_rpc.sql``) so the
+    increment is atomic under a Postgres advisory + row lock. Falls back
+    to the previous read-modify-write path if the RPC isn't deployed
+    yet — that path is racy but preserves ``suspended_at`` correctly
+    (audit H19), so worst-case symptom is an under-count of
+    ``consecutive_failures`` during concurrent failures of the same
+    source. The fallback emits a one-time-per-process warning so the
+    operator knows to deploy the migration.
     """
     if client is None:
         return
+    try:
+        client.rpc(
+            "bump_source_state",
+            {
+                "p_source_name": source_name,
+                "p_success": success,
+                "p_suspend_threshold": SUSPEND_AFTER_CONSECUTIVE_FAILURES,
+            },
+        ).execute()
+        return
+    except Exception as e:
+        # PostgREST returns code PGRST202 / 42883 when the function isn't
+        # found. Anything else (e.g. permission denied, transient network)
+        # is genuine and worth surfacing. We warn-once on missing-function
+        # then fall through to the legacy path; for other errors we log
+        # AND continue to the fallback so a Supabase hiccup mid-scrape
+        # doesn't lose the bookkeeping.
+        msg = str(e)
+        if "PGRST202" in msg or "42883" in msg or "function" in msg.lower() and "does not exist" in msg.lower():
+            _warn_once_rpc_missing()
+        else:
+            print(
+                f"  [supabase] bump_source_state rpc failed for "
+                f"{source_name} ({type(e).__name__}: {e}); falling back to "
+                "read-modify-write",
+                file=sys.stderr,
+            )
+    _update_source_state_legacy(client, source_name, success)
+
+
+_RPC_MISSING_WARNED = False
+
+
+def _warn_once_rpc_missing() -> None:
+    global _RPC_MISSING_WARNED
+    if _RPC_MISSING_WARNED:
+        return
+    _RPC_MISSING_WARNED = True
+    print(
+        "  [supabase] bump_source_state RPC not found in DB. Deploy "
+        "scraper/sql/001_source_states_rpc.sql via Supabase Studio to "
+        "eliminate the consecutive_failures race. Falling back to "
+        "read-modify-write for now.",
+        file=sys.stderr,
+    )
+
+
+def _update_source_state_legacy(client, source_name: str, success: bool) -> None:
+    """Pre-RPC implementation kept as fallback. Documented at the call
+    site. Preserves the H19 fix (suspended_at preservation) but is racy
+    on concurrent failures of the same source.
+    """
     now = _now_iso()
     try:
-        # Fetch current state.
         resp = (
             client.table("source_states")
-            .select("consecutive_failures, suspended")
+            .select("consecutive_failures, suspended, suspended_at")
             .eq("source_name", source_name)
             .maybe_single()
             .execute()
         )
         current = getattr(resp, "data", None) or {}
         failures = current.get("consecutive_failures", 0)
+        was_suspended = bool(current.get("suspended"))
 
         if success:
             row = {
@@ -147,20 +208,42 @@ def update_source_state(client, source_name: str, success: bool) -> None:
             }
         else:
             new_failures = failures + 1
-            newly_suspended = new_failures >= SUSPEND_AFTER_CONSECUTIVE_FAILURES
+            newly_suspended = (
+                new_failures >= SUSPEND_AFTER_CONSECUTIVE_FAILURES
+                and not was_suspended
+            )
             row = {
                 "source_name": source_name,
                 "consecutive_failures": new_failures,
-                "suspended": newly_suspended,
-                "suspended_at": now if newly_suspended and not current.get("suspended") else current.get("suspended_at"),
+                "suspended": was_suspended or newly_suspended,
                 "updated_at": now,
             }
-            if newly_suspended and not current.get("suspended"):
-                print(f"  [supabase] source '{source_name}' suspended after {new_failures} consecutive failures")
+            if newly_suspended:
+                row["suspended_at"] = now
+                print(
+                    f"  [supabase] source '{source_name}' suspended after "
+                    f"{new_failures} consecutive failures"
+                )
 
         client.table("source_states").upsert(row, on_conflict="source_name").execute()
     except Exception as e:
         print(f"  [supabase] update_source_state failed for {source_name}: {e}", file=sys.stderr)
+
+
+def _affected_count(resp, fallback: int = 0) -> int:
+    """Read the affected-row count off a PostgREST response.
+
+    ``count="exact"`` on ``update``/``delete`` sets ``resp.count`` to the
+    number of rows the server actually changed. We prefer that over
+    ``len(resp.data)`` because some Postgres/PostgREST configurations
+    return an empty representation array even when rows were modified
+    (audit H18). Falls back to ``len(resp.data)`` if ``count`` is None.
+    """
+    n = getattr(resp, "count", None)
+    if n is not None:
+        return int(n)
+    data = getattr(resp, "data", None) or []
+    return len(data) if data else fallback
 
 
 def mark_stale_inactive(client, inactive_after_days: int = 7) -> int:
@@ -172,12 +255,12 @@ def mark_stale_inactive(client, inactive_after_days: int = 7) -> int:
     try:
         resp = (
             client.table("jobs")
-            .update({"is_active": False})
+            .update({"is_active": False}, count="exact")
             .lt("last_seen_at", cutoff_iso)
             .eq("is_active", True)
             .execute()
         )
-        n = len(resp.data) if getattr(resp, "data", None) else 0
+        n = _affected_count(resp)
         print(f"  [supabase] marked {n} jobs inactive (last_seen_at < {cutoff_iso})")
         return n
     except Exception as e:
@@ -194,11 +277,11 @@ def hard_delete_old(client, delete_after_days: int = 60) -> int:
     try:
         resp = (
             client.table("jobs")
-            .delete()
+            .delete(count="exact")
             .lt("first_seen_at", cutoff_iso)
             .execute()
         )
-        n = len(resp.data) if getattr(resp, "data", None) else 0
+        n = _affected_count(resp)
         print(f"  [supabase] hard-deleted {n} jobs (first_seen_at < {cutoff_iso})")
         return n
     except Exception as e:

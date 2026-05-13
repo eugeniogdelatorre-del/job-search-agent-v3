@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -19,10 +19,8 @@ const MAX_BYTES = 5 * 1024 * 1024 // 5 MB
 const MAX_CHARS = 40_000 // sanity cap — CVs above this are unusual
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const supabase = await createClient()
+  const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
 
   let form: FormData
@@ -39,13 +37,73 @@ export async function POST(req: NextRequest) {
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ error: 'file > 5MB' }, { status: 400 })
   }
-  const name = (file.name || 'resume.pdf').toLowerCase()
-  const isPdf = name.endsWith('.pdf') || file.type === 'application/pdf'
+  // Client-controlled type/extension is a lie until proven otherwise. Keep
+  // these as a cheap early reject for the obvious "wrong tool" cases and
+  // re-check with the file's actual magic bytes below.
+  const lowerName = (file.name || 'resume.pdf').toLowerCase()
+  const isPdf = lowerName.endsWith('.pdf') || file.type === 'application/pdf'
   if (!isPdf) {
     return NextResponse.json({ error: 'PDF only' }, { status: 400 })
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer())
+
+  // Magic-byte check: a real PDF starts with "%PDF-" (0x25 0x50 0x44 0x46 0x2D).
+  // Trusting `file.type`/extension would let a renamed exe / polyglot land in
+  // storage; the unpdf parse below would catch most cases, but we want a hard
+  // reject *before* spinning up the parser.
+  if (
+    bytes.length < 5 ||
+    bytes[0] !== 0x25 ||
+    bytes[1] !== 0x50 ||
+    bytes[2] !== 0x44 ||
+    bytes[3] !== 0x46 ||
+    bytes[4] !== 0x2d
+  ) {
+    return NextResponse.json(
+      { error: 'not a valid PDF (magic byte check failed)' },
+      { status: 400 },
+    )
+  }
+
+  // Strip control chars, path separators, and NULs from the supplied
+  // filename before we ever persist it. Length-cap to 255 (typical
+  // filesystem limit) so a hostile client can't bloat the DB row.
+  // eslint-disable-next-line no-control-regex
+  const safeFilename = (file.name || 'resume.pdf')
+    .replace(/[\x00-\x1f\x7f\\/]/g, '_')
+    .slice(0, 255)
+
+  // Audit M10: hash the bytes BEFORE the expensive pdfjs parse. If the
+  // same binary has already been uploaded for this user, short-circuit
+  // and return the existing row — saves a multi-second parse on a
+  // common drag-drop-twice flow. Falls through to text-hash dedup below
+  // for the case where the same text comes in via a re-saved PDF (same
+  // resume, slightly different binary).
+  //
+  // Requires web/sql/003_resumes_bytes_hash.sql to be deployed. If the
+  // column isn't present yet the SELECT errors with PGRST204 — we
+  // swallow that specifically so the route still works pre-migration.
+  const bytes_hash = crypto.createHash('sha256').update(bytes).digest('hex')
+  const { data: byHash, error: byHashErr } = await supabase
+    .from('resumes')
+    .select('id, is_active')
+    .eq('user_id', user.id)
+    .eq('bytes_hash', bytes_hash)
+    .maybeSingle()
+  if (byHash) {
+    return NextResponse.json({
+      resume_id: byHash.id,
+      duplicate: true,
+      is_active: byHash.is_active,
+    })
+  }
+  // PGRST204 ≈ "column does not exist". Anything else we log and ignore
+  // — the text-hash dedup below still catches duplicates, just after
+  // paying the parse cost.
+  if (byHashErr && byHashErr.code !== 'PGRST204' && byHashErr.code !== '42703') {
+    console.warn('[api/cv/upload] bytes_hash lookup non-fatal error:', byHashErr.code, byHashErr.message)
+  }
 
   // unpdf ships a serverless build of pdfjs that doesn't rely on DOM
   // globals (DOMMatrix, Promise.withResolvers). Dynamic import so the
@@ -97,24 +155,36 @@ export async function POST(req: NextRequest) {
     .eq('user_id', user.id)
   const isFirst = (count ?? 0) === 0
 
-  const { data: inserted, error } = await supabase
+  // Try to persist bytes_hash. Falls through gracefully when the column
+  // isn't deployed yet (see M10 migration).
+  const insertRow: Record<string, unknown> = {
+    user_id: user.id,
+    filename: safeFilename,
+    parsed_text: truncated,
+    text_hash,
+    bytes_hash,
+    char_count: truncated.length,
+    is_active: isFirst,
+  }
+  let { data: inserted, error } = await supabase
     .from('resumes')
-    .insert({
-      user_id: user.id,
-      filename: file.name || 'resume.pdf',
-      parsed_text: truncated,
-      text_hash,
-      char_count: truncated.length,
-      is_active: isFirst,
-    })
+    .insert(insertRow)
     .select('id, is_active')
     .single()
+  if (error && (error.code === 'PGRST204' || error.code === '42703')) {
+    // Column doesn't exist — retry without it.
+    delete insertRow.bytes_hash
+    ;({ data: inserted, error } = await supabase
+      .from('resumes')
+      .insert(insertRow)
+      .select('id, is_active')
+      .single())
+  }
 
   if (error || !inserted) {
-    return NextResponse.json(
-      { error: `insert failed: ${error?.message ?? 'unknown'}` },
-      { status: 500 }
-    )
+    // Audit M6: don't leak PostgREST internals.
+    console.error('[api/cv/upload] insert failed:', error?.message, error?.code)
+    return NextResponse.json({ error: 'insert failed' }, { status: 500 })
   }
 
   return NextResponse.json({

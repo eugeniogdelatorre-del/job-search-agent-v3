@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { queryJobs } from '@/lib/jobs-query'
 import { parseFilters } from '@/lib/filters'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -22,10 +22,8 @@ function csvEscape(v: unknown): string {
 }
 
 export async function GET(req: NextRequest) {
-  const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  await createClient()
+  const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
 
   const sp = req.nextUrl.searchParams

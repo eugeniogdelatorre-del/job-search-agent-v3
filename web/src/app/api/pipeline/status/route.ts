@@ -3,7 +3,7 @@
 // Returns a normalized stage + per-job statuses for the dashboard button.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -68,10 +68,8 @@ export async function GET(req: NextRequest) {
   // Auth gate to match the rest of /api. Status data isn't catastrophic
   // to leak, but unauthenticated polling could be used to fingerprint our
   // cron schedule and there's no reason to allow it.
-  const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  await createClient()  // ensure middleware-refreshed cookies are loaded
+  const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
 
   const pat = process.env.GITHUB_PAT
@@ -86,8 +84,31 @@ export async function GET(req: NextRequest) {
   }
 
   const runId = req.nextUrl.searchParams.get('runId')
-  if (!runId) {
-    return NextResponse.json({ error: 'runId required' }, { status: 400 })
+  // Audit H15: runId is interpolated into a GitHub API URL. An attacker
+  // could supply something like `12345/../meta` and probe unrelated
+  // endpoints with our PAT. Restrict to a positive integer.
+  if (!runId || !/^\d+$/.test(runId)) {
+    return NextResponse.json({ error: 'runId must be a positive integer' }, { status: 400 })
+  }
+
+  // Audit N-H5: confirm the run belongs to pipeline.yml. Without this,
+  // an authed user could poll any workflow run in the repo and read its
+  // job structure via our PAT. The /actions/runs/{id} endpoint returns
+  // the workflow file path.
+  const runMetaRes = await fetch(
+    `${GH_API}/repos/${owner}/${repo}/actions/runs/${runId}`,
+    { headers: ghHeaders(pat), cache: 'no-store' },
+  )
+  if (runMetaRes.status === 404) {
+    return NextResponse.json({ error: 'run not found' }, { status: 404 })
+  }
+  if (!runMetaRes.ok) {
+    console.error('[api/pipeline/status] meta fetch failed:', runMetaRes.status)
+    return NextResponse.json({ error: 'GitHub API error', status: runMetaRes.status }, { status: 502 })
+  }
+  const runMeta = (await runMetaRes.json()) as { path?: string }
+  if (runMeta.path !== '.github/workflows/pipeline.yml') {
+    return NextResponse.json({ error: 'run does not belong to pipeline.yml' }, { status: 403 })
   }
 
   const res = await fetch(
@@ -131,5 +152,12 @@ export async function GET(req: NextRequest) {
     jobs: jobStatuses,
   }
 
-  return NextResponse.json(body)
+  // Audit M8: front-end polls every 10s, which burns the GitHub PAT's
+  // 5000/hr rate limit fast under any kind of load. A short private
+  // cache lets us coalesce bursts of polls (e.g. React strict-mode
+  // double renders, tab restore) without affecting UX — the UI's
+  // 10-second polling cadence remains the floor on staleness.
+  return NextResponse.json(body, {
+    headers: { 'cache-control': 'private, max-age=2' },
+  })
 }
