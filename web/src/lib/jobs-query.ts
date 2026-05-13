@@ -144,16 +144,29 @@ export async function queryJobs(opts: QueryOpts): Promise<QueryResult> {
 
   // Server-side sort mirrors what the JS post-fetch sort used to do:
   //   match_score DESC NULLS LAST → score_total DESC NULLS LAST → first_seen_at DESC.
-  // We only order by the embed column when there's an active resume — without
-  // one the embedded score is non-deterministic (any historical score may be
-  // picked) so applying the sort key is meaningless.
-  if (activeResumeId) {
-    query = query.order('match_score', {
-      foreignTable: 'job_scores',
-      ascending: false,
-      nullsFirst: false,
-    })
-  }
+  //
+  // 2026-05-13: PostgREST's `.order(col, { foreignTable })` sorts the EMBED
+  // array within each parent row, NOT the parent rows themselves. With our
+  // LEFT join (rows without a job_scores entry still appear in /today and
+  // /archive) the result was that PostgREST silently fell through to the
+  // parent-level keys (score_total / first_seen_at) for the actual row
+  // ordering. Visible symptom: a card with no AI match could land before a
+  // card with 88% match.
+  //
+  // Fix: keep the server-side score_total / first_seen_at sort (it's still
+  // the right pre-sort for `requireScored=false` rows) but reorder again in
+  // JS by match_score DESC NULLS LAST as the primary key. The JS sort is
+  // stable in V8/JSC so identical match scores fall back to the server-side
+  // order (score_total → first_seen_at), which is exactly what we want.
+  //
+  // Pagination caveat for /archive: each page is internally sorted by
+  // match_score, but pages aren't globally consistent — page 2 may contain
+  // a higher match than the bottom of page 1, because pagination boundaries
+  // are still drawn server-side on score_total. The proper fix is a SQL
+  // function returning jobs LEFT JOIN active-resume job_scores with the
+  // composite ORDER BY pushed down. Tracking as future work; for now the
+  // per-page reorder catches the visible regression on /today and /week
+  // (which have no pagination) and improves /archive page-locally.
   query = query
     .order('score_total', { ascending: false, nullsFirst: false })
     .order('first_seen_at', { ascending: false })
@@ -162,8 +175,22 @@ export async function queryJobs(opts: QueryOpts): Promise<QueryResult> {
   const { data, error, count } = await query
   if (error) return { rows: [], total: null, error: error.message }
 
+  // Post-fetch JS sort: match_score DESC NULLS LAST as the primary key.
+  // The activeResumeId filter we applied above means each parent row has
+  // at most one job_scores entry for the active CV, so we can use
+  // `job_scores[0]?.match_score` without ambiguity.
+  const rows = (data ?? []) as JobWithScore[]
+  rows.sort((a, b) => {
+    const am = a.job_scores?.[0]?.match_score ?? null
+    const bm = b.job_scores?.[0]?.match_score ?? null
+    if (am === bm) return 0  // stable: keep server-side order on ties
+    if (am === null) return 1   // NULLs last
+    if (bm === null) return -1
+    return bm - am  // higher match score first
+  })
+
   return {
-    rows: (data ?? []) as JobWithScore[],
+    rows,
     total: count ?? null,
     error: null,
   }
