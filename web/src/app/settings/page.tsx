@@ -14,14 +14,10 @@ export default async function SettingsPage() {
   const monthStart  = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
   const todayStart  = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
 
-  // Three parallel queries:
+  // Two parallel queries that don't depend on pagination:
   //   - spend_tracking for the MTD chart + total
   //   - sources_health for run-level fields (status / latency / last_run / error)
-  //   - jobs (active only) for the new per-source "New today" + "Live" totals.
-  //     We pull only `source` + `first_seen_at` to keep the payload tiny;
-  //     aggregation happens in JS. Range(0, 10_000) covers our scale
-  //     comfortably (current DB ~6k active jobs).
-  const [spendRes, healthRes, jobsRes] = await Promise.all([
+  const [spendRes, healthRes] = await Promise.all([
     supabase
       .from('spend_tracking')
       .select('run_at, operation, model, cost_usd, input_tokens, cached_input_tokens, output_tokens')
@@ -33,17 +29,37 @@ export default async function SettingsPage() {
       .gte('run_at', new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString())
       .order('run_at', { ascending: false })
       .limit(1000),
-    supabase
+  ])
+
+  // 2026-05-13: PostgREST caps each request at 1000 rows (Supabase
+  // server-side `db.max_rows` default), so the previous `.range(0, 10_000)`
+  // was silently truncating the result. The "Live total" header showed
+  // exactly 1000 instead of the real count of active jobs. Paginate the
+  // fetch in 1000-row pages until we get a short page. Loop is bounded
+  // by max_pages so a runaway server can't lock the request.
+  const PAGE = 1000
+  const MAX_PAGES = 50  // hard ceiling = 50k rows; well above our scale
+  const allActiveJobs: { source: string | null; first_seen_at: string | null }[] = []
+  let jobsErr: string | null = null
+  for (let i = 0; i < MAX_PAGES; i += 1) {
+    const from = i * PAGE
+    const to   = from + PAGE - 1
+    const res  = await supabase
       .from('jobs')
       .select('source, first_seen_at')
       .eq('is_active', true)
-      .range(0, 10_000),
-  ])
+      .order('first_seen_at', { ascending: false })  // stable order across pages
+      .range(from, to)
+    if (res.error) { jobsErr = res.error.message; break }
+    const batch = res.data ?? []
+    allActiveJobs.push(...batch)
+    if (batch.length < PAGE) break  // last page
+  }
 
   // Build per-source aggregates: live total (= active rows from this
   // source) and new today (= first_seen_at on or after UTC midnight).
   const perSource: Record<string, { new_today: number; live_total: number }> = {}
-  for (const j of jobsRes.data ?? []) {
+  for (const j of allActiveJobs) {
     const k = j.source ?? '?'
     if (!perSource[k]) perSource[k] = { new_today: 0, live_total: 0 }
     perSource[k].live_total += 1
@@ -77,9 +93,9 @@ export default async function SettingsPage() {
         <SpendChart rows={spendRows} capUsd={8} mtdUsd={mtdUsd} />
       )}
 
-      {healthRes.error ? (
+      {healthRes.error || jobsErr ? (
         <div className="rounded-lg p-4 font-mono text-sm" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.3)', color: '#F87171' }}>
-          Source health load failed: {healthRes.error.message}
+          Source health load failed: {healthRes.error?.message ?? jobsErr}
         </div>
       ) : (
         <SourceHealthTable rows={healthRes.data ?? []} perSource={perSource} />

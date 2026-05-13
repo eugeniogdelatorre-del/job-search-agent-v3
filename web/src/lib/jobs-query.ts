@@ -61,20 +61,140 @@ export async function queryJobs(opts: QueryOpts): Promise<QueryResult> {
     activeResumeId = activeResume?.id ?? null
   }
 
-  // Audit H10: previously this used a LEFT join + JS post-filter for
-  // matchMin/requireScored + JS sort + over-fetch (limit * 3). That broke
-  // pagination in three ways:
-  //   - `count: 'exact'` returned the unfiltered SQL count, so totals lied
-  //     whenever matchMin was active.
-  //   - `range(offset, offset + fetchLimit - 1)` over-fetched and then
-  //     JS-sliced, so pages N>1 missed rows that JS would have selected
-  //     from an earlier window.
-  //   - Sort happened after the page boundary was already drawn, so the
-  //     server-side "top of page" did not match the JS sort key.
-  // Fix: push everything into SQL. Use `!inner` whenever the caller has
-  // asked for scored rows, filter match_score in PostgREST, sort on the
-  // embed column server-side, and `.range()` exactly over the page.
+  // Pre-compute the search-text sanitisation and date cutoff once so both
+  // the RPC and PostgREST paths use identical predicates.
+  const scopedCutoff = scopeSinceDays
+    ? new Date(Date.now() - scopeSinceDays * 86400e3)
+    : null
+  const filterCutoff = postedWithinCutoff(filters.postedWithin)
+  const cutoff =
+    scopedCutoff && filterCutoff
+      ? new Date(Math.max(scopedCutoff.getTime(), filterCutoff.getTime()))
+      : scopedCutoff ?? filterCutoff
+  // Sanitization for the title/company ILIKE search (see PostgREST or-filter
+  // notes below). Same regex on both paths so behaviour matches.
+  // eslint-disable-next-line no-control-regex
+  const qSanitized = filters.q?.replace(/[%_*,()\\.:"'\x00-\x1f]/g, '').trim().slice(0, 100)
+  const q = qSanitized && qSanitized.length > 0 ? qSanitized : null
   const matchMin = typeof filters.matchMin === 'number' ? filters.matchMin : null
+
+  // ─────────────────────────────────────────────────────────────────────
+  // FAST PATH: active resume → call jobs_ranked_for_resume RPC.
+  //
+  // The RPC pushes the LEFT-JOIN + composite ORDER BY (match_score DESC
+  // NULLS LAST, score_total DESC NULLS LAST, first_seen_at DESC) into
+  // Postgres so /archive pagination is globally consistent across pages.
+  // The previous PostgREST path could only sort by parent-table columns;
+  // see web/sql/007_jobs_ranked_for_resume.sql for the full rationale.
+  //
+  // Falls back to the PostgREST path below if (a) there's no active
+  // resume — the embed-column order is moot anyway — or (b) the RPC call
+  // errors (e.g. the migration hasn't been applied yet). The fallback
+  // keeps the page rendering on operator machines that are behind on
+  // schema deploys.
+  // ─────────────────────────────────────────────────────────────────────
+  if (activeResumeId) {
+    type RpcRow = {
+      id: string
+      title: string
+      company: string | null
+      location: string | null
+      remote_status: JobWithScore['remote_status']
+      salary_min_usd: number | null
+      salary_max_usd: number | null
+      salary_source: string | null
+      description: string | null
+      apply_url: string | null
+      source: string
+      source_tier: number | null
+      source_url: string | null
+      function_category: JobWithScore['function_category']
+      function_confidence: number | null
+      vertical: JobWithScore['vertical']
+      seniority: JobWithScore['seniority']
+      score_total: number | null
+      first_seen_at: string
+      last_seen_at: string
+      is_active: boolean
+      match_score: number | null
+      strengths: string[] | null
+      gaps: string[] | null
+      verdict_one_liner: string | null
+      score_breakdown_v5: JobWithScore['job_scores'][number]['score_breakdown_v5']
+      total_count: number
+    }
+    const { data, error } = await supabase.rpc('jobs_ranked_for_resume', {
+      p_resume_id:        activeResumeId,
+      p_offset:           offset,
+      p_limit:            limit,
+      p_since:            cutoff?.toISOString() ?? null,
+      p_function:         filters.function       ?? null,
+      p_vertical:         filters.vertical       ?? null,
+      p_seniority:        filters.seniority      ?? null,
+      p_remote:           filters.remote         ?? null,
+      p_salary_floor:     filters.salaryFloor && filters.salaryFloor > 0
+                            ? filters.salaryFloor
+                            : null,
+      p_q:                q,
+      p_match_min:        matchMin,
+      p_require_scored:   requireScored,
+      p_include_rejected: includeRejected,
+    })
+    if (!error && data) {
+      const rpcRows = data as RpcRow[]
+      const rows: JobWithScore[] = rpcRows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        company: r.company,
+        location: r.location,
+        remote_status: r.remote_status,
+        salary_min_usd: r.salary_min_usd,
+        salary_max_usd: r.salary_max_usd,
+        salary_source: r.salary_source,
+        description: r.description,
+        apply_url: r.apply_url,
+        source: r.source,
+        source_tier: r.source_tier,
+        source_url: r.source_url,
+        function_category: r.function_category,
+        function_confidence: r.function_confidence,
+        vertical: r.vertical,
+        seniority: r.seniority,
+        score_total: r.score_total,
+        first_seen_at: r.first_seen_at,
+        last_seen_at: r.last_seen_at,
+        is_active: r.is_active,
+        job_scores: r.match_score === null && r.score_breakdown_v5 === null
+          ? []  // no row in job_scores for this (job, active resume)
+          : [{
+              match_score:        r.match_score,
+              strengths:          r.strengths ?? [],
+              gaps:               r.gaps      ?? [],
+              verdict_one_liner:  r.verdict_one_liner,
+              score_breakdown_v5: r.score_breakdown_v5,
+            }],
+      }))
+      // `total_count` is identical on every row (count(*) over() window).
+      // Take it from row 0; for an empty result the count is genuinely 0.
+      const total = withCount ? (rpcRows[0]?.total_count ?? 0) : null
+      return { rows, total, error: null }
+    }
+    // RPC errored (most often: function not yet deployed). Log and fall
+    // through to the legacy PostgREST path so the page still renders.
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.warn('[queryJobs] RPC fallback:', error.message)
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // FALLBACK PATH: no active resume, or RPC unavailable.
+  //
+  // Without a resume there's nothing to sort by `match_score` anyway, so
+  // the parent-level keys (`score_total` DESC NULLS LAST → `first_seen_at`
+  // DESC) give a sensible order. The historical Audit H10 reasoning still
+  // applies here.
+  // ─────────────────────────────────────────────────────────────────────
   const needsScoredOnly = matchMin !== null || requireScored
   const scoresSelect = needsScoredOnly
     ? 'job_scores!inner(match_score, strengths, gaps, verdict_one_liner, score_breakdown_v5, resume_id)'
@@ -107,14 +227,6 @@ export async function queryJobs(opts: QueryOpts): Promise<QueryResult> {
     query = query.not('job_scores.match_score', 'is', null)
   }
 
-  const scopedCutoff = scopeSinceDays
-    ? new Date(Date.now() - scopeSinceDays * 86400e3)
-    : null
-  const filterCutoff = postedWithinCutoff(filters.postedWithin)
-  const cutoff =
-    scopedCutoff && filterCutoff
-      ? new Date(Math.max(scopedCutoff.getTime(), filterCutoff.getTime()))
-      : scopedCutoff ?? filterCutoff
   if (cutoff) query = query.gte('first_seen_at', cutoff.toISOString())
 
   if (filters.function) query = query.eq('function_category', filters.function)
@@ -126,34 +238,15 @@ export async function queryJobs(opts: QueryOpts): Promise<QueryResult> {
       `salary_max_usd.gte.${filters.salaryFloor},salary_max_usd.is.null`
     )
   }
-  if (filters.q) {
-    // Sanitization for PostgREST `.or()` filter values. The string is
-    // interpolated into the or-syntax `title.ilike.%X%,company.ilike.%X%`
-    // and ANY of these characters could break out of the value position:
-    //   `, ( ) . : \ " '`  — PostgREST or-syntax delimiters/grouping
-    //   `% _ *`            — ILIKE wildcards (also denial-of-search risk)
-    //   control chars      — header smuggling / URL parser edge cases
-    // After stripping we trim and length-cap to 100. If nothing remains
-    // we skip the filter rather than build a match-all pattern.
-    // eslint-disable-next-line no-control-regex
-    const q = filters.q.replace(/[%_*,()\\.:"'\x00-\x1f]/g, '').trim().slice(0, 100)
-    if (q) {
-      query = query.or(`title.ilike.%${q}%,company.ilike.%${q}%`)
-    }
+  if (q) {
+    // Same sanitization the RPC path uses; the variable `q` is pre-cleaned
+    // at the top of this function.
+    query = query.or(`title.ilike.%${q}%,company.ilike.%${q}%`)
   }
 
-  // Server-side sort mirrors what the JS post-fetch sort used to do:
-  //   match_score DESC NULLS LAST → score_total DESC NULLS LAST → first_seen_at DESC.
-  // We only order by the embed column when there's an active resume — without
-  // one the embedded score is non-deterministic (any historical score may be
-  // picked) so applying the sort key is meaningless.
-  if (activeResumeId) {
-    query = query.order('match_score', {
-      foreignTable: 'job_scores',
-      ascending: false,
-      nullsFirst: false,
-    })
-  }
+  // Server-side sort. Without an active resume there's no match_score to
+  // sort by, so `score_total DESC NULLS LAST → first_seen_at DESC` is the
+  // best we can do.
   query = query
     .order('score_total', { ascending: false, nullsFirst: false })
     .order('first_seen_at', { ascending: false })
