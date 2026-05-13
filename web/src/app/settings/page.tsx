@@ -1,19 +1,27 @@
 ﻿// /settings — MTD spend chart, per-source health, account info. NavBar in layout.tsx.
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
 import { SpendChart } from '@/components/SpendChart'
 import { SourceHealthTable } from '@/components/SourceHealthTable'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SettingsPage() {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient()
+  const user = await getCurrentUser()  // Audit N-M3
 
-  const now        = new Date()
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  const now         = new Date()
+  const monthStart  = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  const todayStart  = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
 
-  const [spendRes, healthRes] = await Promise.all([
+  // Three parallel queries:
+  //   - spend_tracking for the MTD chart + total
+  //   - sources_health for run-level fields (status / latency / last_run / error)
+  //   - jobs (active only) for the new per-source "New today" + "Live" totals.
+  //     We pull only `source` + `first_seen_at` to keep the payload tiny;
+  //     aggregation happens in JS. Range(0, 10_000) covers our scale
+  //     comfortably (current DB ~6k active jobs).
+  const [spendRes, healthRes, jobsRes] = await Promise.all([
     supabase
       .from('spend_tracking')
       .select('run_at, operation, model, cost_usd, input_tokens, cached_input_tokens, output_tokens')
@@ -25,7 +33,24 @@ export default async function SettingsPage() {
       .gte('run_at', new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString())
       .order('run_at', { ascending: false })
       .limit(1000),
+    supabase
+      .from('jobs')
+      .select('source, first_seen_at')
+      .eq('is_active', true)
+      .range(0, 10_000),
   ])
+
+  // Build per-source aggregates: live total (= active rows from this
+  // source) and new today (= first_seen_at on or after UTC midnight).
+  const perSource: Record<string, { new_today: number; live_total: number }> = {}
+  for (const j of jobsRes.data ?? []) {
+    const k = j.source ?? '?'
+    if (!perSource[k]) perSource[k] = { new_today: 0, live_total: 0 }
+    perSource[k].live_total += 1
+    if (j.first_seen_at && j.first_seen_at >= todayStart.toISOString()) {
+      perSource[k].new_today += 1
+    }
+  }
 
   const spendRows = spendRes.data ?? []
   const mtdUsd    = spendRows.reduce((acc, r) => acc + Number(r.cost_usd ?? 0), 0)
@@ -57,7 +82,7 @@ export default async function SettingsPage() {
           Source health load failed: {healthRes.error.message}
         </div>
       ) : (
-        <SourceHealthTable rows={healthRes.data ?? []} />
+        <SourceHealthTable rows={healthRes.data ?? []} perSource={perSource} />
       )}
     </main>
   )

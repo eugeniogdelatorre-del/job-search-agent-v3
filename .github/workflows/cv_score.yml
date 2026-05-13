@@ -13,44 +13,63 @@ name: cv_score
 # Batch poll on overlapping dispatches.
 
 on:
-  # Resumed 2026-05-07. Last stage of the daily pipeline — finishes by
-  # ~07:55 UTC = 04:55 ART, comfortably before the 7-AM-ART deadline.
-  schedule:
-    - cron: "0 7 * * *"
+  # Audit H4: triggered by geo_filter completion. No standalone cron — the
+  # whole chain rides on scrape's 04:00 UTC cron and propagates forward.
+  workflow_run:
+    workflows: ["geo_filter"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
+      # Audit M22: typed number.
       limit:
         description: "Optional: cap jobs per run (default 500)"
         required: false
-        default: ""
+        type: number
+
+permissions:
+  contents: read
 
 concurrency:
-  group: cv_score
+  # Audit H2: shared with pipeline.yml's cv-score job.
+  group: stage-cv_score
   cancel-in-progress: false
 
 jobs:
   cv_score:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 55
 
     steps:
       - uses: actions/checkout@v4
 
+      # Audit H6: pre-flight check so missing secrets fail loudly at
+      # step 1 with a clear list, not deep inside Python with a cryptic
+      # traceback. `set -euo pipefail` + explicit `if/then` avoids the
+      # brittle `&& ... || true` pattern of the previous version.
       - name: Check required secrets
-        run: |
-          ok=true
-          [ -z "$SUPABASE_URL" ]       && echo "❌ SUPABASE_URL is not set"       && ok=false || echo "✅ SUPABASE_URL"
-          [ -z "$SUPABASE_SERVICE_KEY" ] && echo "❌ SUPABASE_SERVICE_KEY is not set" && ok=false || echo "✅ SUPABASE_SERVICE_KEY"
-          [ -z "$ANTHROPIC_API_KEY" ]  && echo "❌ ANTHROPIC_API_KEY is not set"  && ok=false || echo "✅ ANTHROPIC_API_KEY"
-          [ "$ok" = "false" ] && echo "" && echo "Add missing secrets at: repo → Settings → Secrets and variables → Actions" && exit 1 || true
+        shell: bash
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -z "${SUPABASE_URL:-}" ]         && missing+=("SUPABASE_URL")
+          [ -z "${SUPABASE_SERVICE_KEY:-}" ] && missing+=("SUPABASE_SERVICE_KEY")
+          [ -z "${ANTHROPIC_API_KEY:-}" ]    && missing+=("ANTHROPIC_API_KEY")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}" >&2
+            echo "Add them at: repo > Settings > Secrets and variables > Actions" >&2
+            exit 1
+          fi
+          echo "All required secrets present."
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.7"
           cache: "pip"
           cache-dependency-path: scraper/requirements.txt
 
@@ -63,9 +82,25 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          # Quoted as data via env var — never interpolate ${{ inputs.* }}
+          # directly into a `run:` block. See SECURITY note in repo audit.
+          LIMIT_INPUT: ${{ github.event.inputs.limit }}
         run: |
-          if [ -n "${{ github.event.inputs.limit }}" ]; then
-            python scraper/cv_score.py --limit ${{ github.event.inputs.limit }}
+          if [ -n "$LIMIT_INPUT" ]; then
+            python scraper/cv_score.py --limit "$LIMIT_INPUT"
           else
             python scraper/cv_score.py
           fi
+
+  notify_on_failure:
+    needs: [cv_score]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send failure email via Resend
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 scraper/notify.py

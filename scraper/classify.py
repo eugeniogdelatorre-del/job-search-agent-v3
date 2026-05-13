@@ -59,7 +59,8 @@ MAX_JOBS_PER_RUN = 500
 # (rule score below the warm threshold) never get cv_scored, so the
 # function_category they'd produce is never read. Keep this in sync with
 # cv_score.WARM_THRESHOLD — both should be the same number.
-CLASSIFY_MIN_SCORE = 60
+# Lowered 60 → 40 (2026-05-13). See cv_score.py WARM_THRESHOLD comment.
+CLASSIFY_MIN_SCORE = 40
 
 # §4.1: LOCKED system prompt. Do not edit.
 SYSTEM_PROMPT = (
@@ -227,25 +228,79 @@ def _parsed_to_row(parsed: dict, job: dict) -> dict:
         salary_max = _clamp_int_or_none(parsed.get("salary_max_usd"))
         if salary_min is not None and salary_max is not None and salary_min > salary_max:
             salary_min, salary_max = salary_max, salary_min
+        # Audit H17: previously we wrote BOTH columns whenever either was
+        # set, so a {min: 100000, max: null} AI response would write
+        # salary_max_usd=None and silently erase whatever the scraper had
+        # extracted before. Only patch the side(s) that came back non-null
+        # so partial AI signal augments — never overwrites — prior data.
         if salary_min is not None or salary_max is not None:
-            fields["salary_min_usd"] = salary_min
-            fields["salary_max_usd"] = salary_max
+            if salary_min is not None:
+                fields["salary_min_usd"] = salary_min
+            if salary_max is not None:
+                fields["salary_max_usd"] = salary_max
             fields["salary_source"] = "extracted_by_ai"
     return fields
 
 
+_WRITE_BACK_BATCH = 200
+
+
 def _write_back(client, updates: list[tuple[str, dict]]) -> int:
-    """updates = list of (job_id, patch_dict). Returns rows updated."""
+    """updates = list of (job_id, patch_dict). Returns rows written.
+
+    Audit M4: previously did N serial UPDATEs (500 round-trips for a
+    typical batch). Switch to chunked ``upsert`` with on_conflict=id so
+    a typical run is 2-3 round-trips instead of 500. The patch dicts
+    don't include 'id'; we inject it per-row from the tuple.
+
+    If a chunk fails wholesale we fall back to per-row UPDATEs for THAT
+    chunk so a single bad row doesn't drop the other 199 — preserves
+    the old per-row failure mode for the rare case.
+    """
     if client is None:
         return 0
+    if not updates:
+        return 0
+    rows = [{"id": job_id, **patch} for job_id, patch in updates]
     written = 0
-    for job_id, patch in updates:
+    for i in range(0, len(rows), _WRITE_BACK_BATCH):
+        chunk = rows[i : i + _WRITE_BACK_BATCH]
         try:
-            resp = client.table("jobs").update(patch).eq("id", job_id).execute()
-            if getattr(resp, "data", None):
-                written += 1
+            resp = (
+                client.table("jobs")
+                .upsert(chunk, on_conflict="id")
+                .execute()
+            )
+            written += len(getattr(resp, "data", None) or chunk)
         except Exception as e:
-            print(f"  [supabase] update {job_id} failed: {e}", file=sys.stderr)
+            print(
+                f"  [supabase] chunk upsert (rows {i}..{i + len(chunk) - 1}) "
+                f"failed: {e} — falling back to per-row",
+                file=sys.stderr,
+            )
+            # Audit N-C1: don't mutate the row dict (pop"id") — the same
+            # dict is referenced from the outer `rows` list and a future
+            # iteration / caller would see an id-less object. Build a
+            # patch copy each time instead.
+            for row in chunk:
+                row_id = row.get("id")
+                if not row_id:
+                    continue
+                patch_only = {k: v for k, v in row.items() if k != "id"}
+                try:
+                    resp = (
+                        client.table("jobs")
+                        .update(patch_only)
+                        .eq("id", row_id)
+                        .execute()
+                    )
+                    if getattr(resp, "data", None):
+                        written += 1
+                except Exception as e2:
+                    print(
+                        f"  [supabase] update {row_id} failed: {e2}",
+                        file=sys.stderr,
+                    )
     return written
 
 
@@ -345,42 +400,50 @@ def main() -> int:
     job_by_id = {str(j["id"]): j for j in jobs}
     ok = 0
     errored = 0
-    parse_failed = 0
+    # Audit M2: split the old `parse_failed` counter into the three
+    # distinct failure modes so the operator can tell "model is drifting"
+    # from "the batch returned ids we didn't submit."
+    json_parse_failed = 0
+    unknown_custom_id = 0
 
     for result in anthropic.messages.batches.results(batch_id):
         custom_id = getattr(result, "custom_id", None)
         outcome = getattr(result, "result", None)
         outcome_type = getattr(outcome, "type", None)
-        if outcome_type != "succeeded":
-            errored += 1
-            continue
         message = getattr(outcome, "message", None)
-        if not message:
+        # Audit M1: count usage even on errored outcomes. Anthropic
+        # charges input tokens for failed requests too — skipping made
+        # the budget log under-count.
+        if message is not None:
+            usage = getattr(message, "usage", None)
+            if usage:
+                input_tokens_total += getattr(usage, "input_tokens", 0) or 0
+                output_tokens_total += getattr(usage, "output_tokens", 0) or 0
+        if outcome_type != "succeeded" or message is None:
             errored += 1
             continue
-        usage = getattr(message, "usage", None)
-        if usage:
-            input_tokens_total += getattr(usage, "input_tokens", 0) or 0
-            output_tokens_total += getattr(usage, "output_tokens", 0) or 0
         # Content is a list of blocks — grab the first text block.
         text = ""
         for block in getattr(message, "content", []) or []:
             if getattr(block, "type", None) == "text":
                 text = getattr(block, "text", "") or ""
                 break
-        parsed = _extract_json(text)
-        if not parsed:
-            parse_failed += 1
-            continue
         job = job_by_id.get(custom_id)
         if job is None:
-            parse_failed += 1
+            unknown_custom_id += 1
+            continue
+        parsed = _extract_json(text)
+        if not parsed:
+            json_parse_failed += 1
             continue
         updates.append((custom_id, _parsed_to_row(parsed, job)))
         ok += 1
 
+    parse_failed = json_parse_failed + unknown_custom_id
     print(
-        f"  [parse] ok={ok}  parse_failed={parse_failed}  errored={errored}  "
+        f"  [parse] ok={ok}  parse_failed={parse_failed}  "
+        f"(json={json_parse_failed} unknown_id={unknown_custom_id})  "
+        f"errored={errored}  "
         f"input_tokens={input_tokens_total}  output_tokens={output_tokens_total}"
     )
 

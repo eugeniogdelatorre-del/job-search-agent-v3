@@ -18,7 +18,8 @@
 // Then add GITHUB_PAT to Vercel env (Production scope).
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
+import { GH_API, ghHeaders, findInflightDispatch } from '@/lib/github-actions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -29,10 +30,8 @@ const GH_WORKFLOW = 'cv_score.yml'
 const GH_REF      = 'main'
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const supabase = await createClient()
+  const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
 
   // Body is optional — absence means "re-score with current active CV"
@@ -43,50 +42,6 @@ export async function POST(req: NextRequest) {
     // empty body is fine
   }
 
-  // ── Step 1: activate the chosen CV (if resume_id supplied) ───────────────
-  let activated = false
-  if (body.resume_id) {
-    const resumeId = body.resume_id
-
-    const { data: target } = await supabase
-      .from('resumes')
-      .select('id')
-      .eq('id', resumeId)
-      .eq('user_id', user.id)
-      .maybeSingle()
-
-    if (!target) {
-      return NextResponse.json({ error: 'resume not found' }, { status: 404 })
-    }
-
-    // Deactivate all others first (avoids partial-index violation)
-    const { error: deactErr } = await supabase
-      .from('resumes')
-      .update({ is_active: false })
-      .eq('user_id', user.id)
-      .neq('id', resumeId)
-    if (deactErr) {
-      return NextResponse.json(
-        { error: `deactivate failed: ${deactErr.message}` },
-        { status: 500 }
-      )
-    }
-
-    const { error: actErr } = await supabase
-      .from('resumes')
-      .update({ is_active: true })
-      .eq('id', resumeId)
-      .eq('user_id', user.id)
-    if (actErr) {
-      return NextResponse.json(
-        { error: `activate failed: ${actErr.message}` },
-        { status: 500 }
-      )
-    }
-    activated = true
-  }
-
-  // ── Step 2: dispatch cv_score.yml via GitHub API ──────────────────────────
   const pat = process.env.GITHUB_PAT
   if (!pat) {
     return NextResponse.json(
@@ -100,19 +55,53 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // ── In-flight guard ───────────────────────────────────────────────────────
+  // Check BEFORE touching the resumes table. Re-activating mid-batch would
+  // race the running cv_score workflow against the active-CV flip and could
+  // leave scores mapped to the wrong resume_id. We'd rather refuse the
+  // request than corrupt the score audit trail.
+  const inflight = await findInflightDispatch(GH_OWNER, GH_REPO, GH_WORKFLOW, pat)
+  if (inflight) {
+    return NextResponse.json(
+      {
+        error: 'cv_score already running',
+        runId: inflight.id,
+        url: inflight.html_url,
+        status: inflight.status,
+      },
+      { status: 409 },
+    )
+  }
+
+  // ── Step 1: activate the chosen CV (if resume_id supplied) ───────────────
+  // Audit H12: single atomic RPC instead of deactivate-then-activate.
+  // Requires web/sql/001_resumes_set_active.sql to have been applied.
+  let activated = false
+  if (body.resume_id) {
+    const { error: rpcErr } = await supabase.rpc('set_active_resume', {
+      p_user_id: user.id,
+      p_resume_id: body.resume_id,
+    })
+    if (rpcErr) {
+      if (/resume not found/i.test(rpcErr.message)) {
+        return NextResponse.json({ error: 'resume not found' }, { status: 404 })
+      }
+      return NextResponse.json(
+        { error: `activate failed: ${rpcErr.message}` },
+        { status: 500 }
+      )
+    }
+    activated = true
+  }
+
+  // ── Step 2: dispatch cv_score.yml via GitHub API ──────────────────────────
   const dispatchUrl =
-    `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}` +
+    `${GH_API}/repos/${GH_OWNER}/${GH_REPO}` +
     `/actions/workflows/${GH_WORKFLOW}/dispatches`
 
   const ghRes = await fetch(dispatchUrl, {
     method: 'POST',
-    headers: {
-      Accept:                'application/vnd.github+json',
-      Authorization:         `Bearer ${pat}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-      'Content-Type':        'application/json',
-      'User-Agent':          'job-search-agent-v3',
-    },
+    headers: ghHeaders(pat),
     body: JSON.stringify({ ref: GH_REF }),
   })
 

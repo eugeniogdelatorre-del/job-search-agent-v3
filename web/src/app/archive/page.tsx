@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
 import { FilterBar } from '@/components/FilterBar'
 import { ArchiveTable } from '@/components/ArchiveTable'
 import { ExportMenu } from '@/components/ExportMenu'
@@ -15,13 +15,17 @@ export default async function ArchivePage({
 }: {
   searchParams: Record<string, string | string[] | undefined>
 }) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  await createClient()
+  const user = await getCurrentUser()  // Audit N-M3: cached per request
   if (!user) redirect('/login')
 
   const filters  = parseFilters(searchParams)
   const pageRaw  = Array.isArray(searchParams.page) ? searchParams.page[0] : searchParams.page
   const page     = Math.max(1, Number(pageRaw) || 1)
+  // Audit P-2: ?showRejected=1 reveals what the pipeline excluded so
+  // the operator can sanity-check geo_filter / retention / rule-gates.
+  const showRejectedRaw = Array.isArray(searchParams.showRejected) ? searchParams.showRejected[0] : searchParams.showRejected
+  const includeRejected = showRejectedRaw === '1' || showRejectedRaw === 'true'
 
   return (
     <main className="mx-auto max-w-7xl space-y-4 p-4">
@@ -35,6 +39,11 @@ export default async function ArchivePage({
           </h1>
           <p className="mt-1 font-mono text-[11px]" style={{ color: '#6B7A99' }}>
             Last 60 days · jobs cycle out after 60d per retention policy
+            {includeRejected && (
+              <span className="ml-2" style={{ color: '#F87171' }}>
+                · debug: showing excluded rows (geo-rejected / gate-failed / inactive)
+              </span>
+            )}
           </p>
         </div>
         <ExportMenu
@@ -44,7 +53,7 @@ export default async function ArchivePage({
       </div>
       <FilterBar />
       <Suspense fallback={null}>
-        <ArchiveTable filters={filters} page={page} />
+        <ArchiveTable filters={filters} page={page} includeRejected={includeRejected} />
       </Suspense>
     </main>
   )

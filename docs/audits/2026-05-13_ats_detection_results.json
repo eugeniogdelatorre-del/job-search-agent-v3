@@ -1,0 +1,257 @@
+[
+  {
+    "name": "MEXC",
+    "domain": "mexc.com",
+    "fetched_ok": false,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.mexc.com', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.mexc.com', port=443): Failed to resolve 'work.mexc.com' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Mountain Protocol",
+    "domain": "mountainprotocol.com",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.mountainprotocol.com', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.mountainprotocol.com', port=443): Failed to resolve 'work.mountainprotocol.com' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Ondo",
+    "domain": "ondo.finance",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.ondo.finance', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.ondo.finance', port=443): Failed to resolve 'work.ondo.finance' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Frax",
+    "domain": "frax.finance",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.frax.finance', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.frax.finance', port=443): Failed to resolve 'work.frax.finance' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Yearn",
+    "domain": "yearn.fi",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.yearn.fi', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.yearn.fi', port=443): Failed to resolve 'work.yearn.fi' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Pendle",
+    "domain": "pendle.finance",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.pendle.finance', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.pendle.finance', port=443): Failed to resolve 'work.pendle.finance' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "GMX",
+    "domain": "gmx.io",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.gmx.io', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.gmx.io', port=443): Failed to resolve 'work.gmx.io' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "dYdX",
+    "domain": "dydx.foundation",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.dydx.foundation', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.dydx.foundation', port=443): Failed to resolve 'work.dydx.foundation' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Across",
+    "domain": "across.to",
+    "fetched_ok": true,
+    "ats_hits": {
+      "ashby": [
+        "https://across.to/ -> jobs.ashbyhq.com/risklabs"
+      ]
+    },
+    "last_error": "HTTPSConnectionPool(host='work.across.to', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.across.to', port=443): Failed to resolve 'work.across.to' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "deBridge",
+    "domain": "debridge.finance",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.debridge.finance', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.debridge.finance', port=443): Failed to resolve 'work.debridge.finance' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Avail",
+    "domain": "availproject.org",
+    "fetched_ok": true,
+    "ats_hits": {
+      "notion": [
+        "https://availproject.org/ -> avail-project.notion.site"
+      ]
+    },
+    "last_error": "HTTPSConnectionPool(host='work.availproject.org', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.availproject.org', port=443): Failed to resolve 'work.availproject.org' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "EigenLayer",
+    "domain": "eigenlayer.xyz",
+    "fetched_ok": true,
+    "ats_hits": {
+      "ashby": [
+        "https://eigenlayer.xyz/careers -> jobs.ashbyhq.com/eigen-labs",
+        "https://eigenlayer.xyz/jobs -> jobs.ashbyhq.com/eigen-labs",
+        "https://eigenlayer.xyz/join -> jobs.ashbyhq.com/eigen-labs",
+        "https://eigenlayer.xyz/team -> jobs.ashbyhq.com/eigen-labs",
+        "https://eigenlayer.xyz/hiring -> jobs.ashbyhq.com/eigen-labs",
+        "https://eigenlayer.xyz/work-with-us -> jobs.ashbyhq.com/eigen-labs",
+        "https://eigenlayer.xyz/ -> jobs.ashbyhq.com/eigen-labs"
+      ]
+    },
+    "last_error": "HTTPSConnectionPool(host='work.eigenlayer.xyz', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.eigenlayer.xyz', port=443): Failed to resolve 'work.eigenlayer.xyz' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Polymer",
+    "domain": "polymerlabs.org",
+    "fetched_ok": true,
+    "ats_hits": {
+      "notion": [
+        "https://polymerlabs.org/careers -> polymer-labs.notion.site",
+        "https://polymerlabs.org/jobs -> polymer-labs.notion.site",
+        "https://polymerlabs.org/join -> polymer-labs.notion.site",
+        "https://polymerlabs.org/team -> polymer-labs.notion.site",
+        "https://polymerlabs.org/hiring -> polymer-labs.notion.site",
+        "https://polymerlabs.org/work-with-us -> polymer-labs.notion.site",
+        "https://polymerlabs.org/ -> polymer-labs.notion.site"
+      ]
+    },
+    "last_error": "HTTPSConnectionPool(host='work.polymerlabs.org', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.polymerlabs.org', port=443): Failed to resolve 'work.polymerlabs.org' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Karak",
+    "domain": "karak.network",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.karak.network', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.karak.network', port=443): Failed to resolve 'work.karak.network' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Renzo",
+    "domain": "renzoprotocol.com",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.renzoprotocol.com', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.renzoprotocol.com', port=443): Failed to resolve 'work.renzoprotocol.com' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "EtherFi",
+    "domain": "ether.fi",
+    "fetched_ok": true,
+    "ats_hits": {
+      "notion": [
+        "https://ether.fi/careers -> etherfi.notion.site",
+        "https://ether.fi/ -> etherfi.notion.site"
+      ]
+    },
+    "last_error": "HTTPSConnectionPool(host='work.ether.fi', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.ether.fi', port=443): Failed to resolve 'work.ether.fi' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Kelp",
+    "domain": "kelpdao.xyz",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.kelpdao.xyz', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.kelpdao.xyz', port=443): Failed to resolve 'work.kelpdao.xyz' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Puffer",
+    "domain": "puffer.fi",
+    "fetched_ok": true,
+    "ats_hits": {
+      "workable": [
+        "https://puffer.fi/ -> apply.workable.com/puffer-finance"
+      ]
+    },
+    "last_error": "HTTPSConnectionPool(host='work.puffer.fi', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.puffer.fi', port=443): Failed to resolve 'work.puffer.fi' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Rabby",
+    "domain": "rabby.io",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.rabby.io', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.rabby.io', port=443): Failed to resolve 'work.rabby.io' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Tenderly",
+    "domain": "tenderly.co",
+    "fetched_ok": true,
+    "ats_hits": {
+      "notion": [
+        "https://tenderly.co/careers -> tenderlydev.notion.site",
+        "https://tenderly.co/team -> tenderlydev.notion.site",
+        "https://tenderly.co/ -> tenderlydev.notion.site"
+      ]
+    },
+    "last_error": "HTTPSConnectionPool(host='work.tenderly.co', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.tenderly.co', port=443): Failed to resolve 'work.tenderly.co' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Infura",
+    "domain": "infura.io",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.infura.io', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.infura.io', port=443): Failed to resolve 'work.infura.io' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Chainstack",
+    "domain": "chainstack.com",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.chainstack.com', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.chainstack.com', port=443): Failed to resolve 'work.chainstack.com' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Crossmint",
+    "domain": "crossmint.com",
+    "fetched_ok": true,
+    "ats_hits": {
+      "notion": [
+        "https://crossmint.com/team -> crossmint.notion.site",
+        "https://crossmint.com/ -> crossmint.notion.site"
+      ]
+    },
+    "last_error": "HTTPSConnectionPool(host='work.crossmint.com', port=443): Max retries exceeded with url: / (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: certificate has expired (_ssl.c:1081)')))"
+  },
+  {
+    "name": "Privy",
+    "domain": "privy.io",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.privy.io', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.privy.io', port=443): Failed to resolve 'work.privy.io' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Snapshot",
+    "domain": "snapshot.org",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.snapshot.org', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.snapshot.org', port=443): Failed to resolve 'work.snapshot.org' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Initia",
+    "domain": "initia.xyz",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.initia.xyz', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.initia.xyz', port=443): Failed to resolve 'work.initia.xyz' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "RedStone",
+    "domain": "redstone.finance",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": null
+  },
+  {
+    "name": "API3",
+    "domain": "api3.org",
+    "fetched_ok": true,
+    "ats_hits": {
+      "notion": [
+        "https://api3.org/ -> api3data.notion.site"
+      ]
+    },
+    "last_error": "HTTPSConnectionPool(host='work.api3.org', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.api3.org', port=443): Failed to resolve 'work.api3.org' ([Errno 11001] getaddrinfo failed)\"))"
+  },
+  {
+    "name": "Aleo",
+    "domain": "aleo.org",
+    "fetched_ok": true,
+    "ats_hits": {},
+    "last_error": "HTTPSConnectionPool(host='work.aleo.org', port=443): Max retries exceeded with url: / (Caused by NameResolutionError(\"HTTPSConnection(host='work.aleo.org', port=443): Failed to resolve 'work.aleo.org' ([Errno 11001] getaddrinfo failed)\"))"
+  }
+]

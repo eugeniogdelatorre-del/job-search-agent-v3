@@ -78,10 +78,23 @@ export function SpendChart({
   const sortedDays = Array.from(dayKeys).sort()
   const filled: string[] = []
   if (sortedDays.length > 0) {
-    const first = new Date(sortedDays[0] + 'T00:00:00Z')
-    const last  = new Date(sortedDays[sortedDays.length - 1] + 'T00:00:00Z')
-    for (let d = new Date(first); d <= last; d.setUTCDate(d.getUTCDate() + 1)) {
-      filled.push(d.toISOString().slice(0, 10))
+    // Audit L16: previously mutated a single Date in-place via setUTCDate
+    // inside the for-condition. Worked because toISOString() read the
+    // state before the next mutation, but the pattern is brittle. Step
+    // through in milliseconds (UTC has no DST so this is exact).
+    const firstMs = Date.UTC(
+      Number(sortedDays[0].slice(0, 4)),
+      Number(sortedDays[0].slice(5, 7)) - 1,
+      Number(sortedDays[0].slice(8, 10)),
+    )
+    const lastDay = sortedDays[sortedDays.length - 1]
+    const lastMs = Date.UTC(
+      Number(lastDay.slice(0, 4)),
+      Number(lastDay.slice(5, 7)) - 1,
+      Number(lastDay.slice(8, 10)),
+    )
+    for (let ms = firstMs; ms <= lastMs; ms += 86_400_000) {
+      filled.push(new Date(ms).toISOString().slice(0, 10))
     }
   }
   // Stable op-stack order: smaller bands first so cv_score sits on top.

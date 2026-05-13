@@ -112,12 +112,24 @@ def _job_from_api(item: dict, source_url: str, category: str) -> dict | None:
     if isinstance(salary_field, str) and salary_field:
         sal_min, sal_max, sal_src = _parse_salary(salary_field)
     elif isinstance(salary_field, dict):
-        try:
-            lo = int(salary_field.get("min") or salary_field.get("from") or 0) or None
-            hi = int(salary_field.get("max") or salary_field.get("to") or 0) or None
-        except (TypeError, ValueError):
-            lo, hi = None, None
-        if lo and hi and 0 < lo <= hi <= 2_000_000 and lo >= 10_000:
+        # Audit L11: ``int(x or 0) or None`` collapses 0 to None, so a
+        # legit salary of $0 (rare but possible — internship listings)
+        # looks like a missing value. Treat None explicitly and let 0
+        # fall through to the range check below where it will be
+        # rejected by ``lo > 0`` for a real reason ("zero is not a
+        # listed salary"), not silently coerced.
+        def _opt_int(v) -> int | None:
+            if v is None:
+                return None
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                return None
+        lo = _opt_int(salary_field.get("min")) if salary_field.get("min") is not None \
+            else _opt_int(salary_field.get("from"))
+        hi = _opt_int(salary_field.get("max")) if salary_field.get("max") is not None \
+            else _opt_int(salary_field.get("to"))
+        if lo is not None and hi is not None and 0 < lo <= hi <= 2_000_000 and lo >= 10_000:
             sal_min, sal_max, sal_src = lo, hi, "listed"
     else:
         try:

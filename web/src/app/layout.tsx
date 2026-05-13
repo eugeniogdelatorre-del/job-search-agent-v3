@@ -7,7 +7,7 @@
 import type { Metadata } from 'next'
 import { IBM_Plex_Mono, Syne, Inter } from 'next/font/google'
 import { cn } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser } from '@/lib/supabase/server'
 import { NavBar } from '@/components/NavBar'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
@@ -38,10 +38,9 @@ export const metadata: Metadata = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Audit N-M3: cached helper, no separate client construction needed
+  // here since the layout doesn't query any tables.
+  const user = await getCurrentUser()
 
   return (
     <html

@@ -15,7 +15,12 @@ if __package__ in (None, ""):
 else:
     from . import stale_apps, supabase_client
 
-INACTIVE_AFTER_DAYS = 7
+# Inactive after 30 days un-re-scraped (bumped 7→30 on 2026-05-13). 7 days
+# was killing valid jobs whenever a source paginated past the first page
+# (the API only returns the front of the queue, so a slot that hasn't
+# rotated to the top in a week looks dead even when the role is still
+# hiring). 30 matches MAX_JOB_AGE_DAYS in cv_score so the two windows align.
+INACTIVE_AFTER_DAYS = 30
 DELETE_AFTER_DAYS = 60
 
 

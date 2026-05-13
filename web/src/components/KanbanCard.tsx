@@ -7,8 +7,29 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ExternalLink, StickyNote, X } from 'lucide-react'
+import type { DraggableAttributes } from '@dnd-kit/core'
+import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities'
 import { formatRelativeDate } from '@/lib/format'
 import type { Application } from '@/types/db'
+
+/**
+ * Audit M15: presentational variant of KanbanCard used inside
+ * <DragOverlay>. It deliberately does NOT call ``useSortable`` so we
+ * don't register a second sortable with the same id as the still-mounted
+ * source card — that combination causes dnd-kit to emit duplicate-id
+ * warnings and momentarily breaks collision detection.
+ */
+export function KanbanCardOverlay({ application }: { application: Application }) {
+  return (
+    <CardInner
+      application={application}
+      onEdit={() => {}}
+      onDelete={undefined}
+      dragAttributes={undefined}
+      dragListeners={undefined}
+    />
+  )
+}
 
 export function KanbanCard({
   application,
@@ -30,26 +51,40 @@ export function KanbanCard({
 
   return (
     <div ref={setNodeRef} style={style}>
+      <CardInner
+        application={application}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        dragAttributes={attributes}
+        dragListeners={listeners}
+      />
+    </div>
+  )
+}
+
+function CardInner({
+  application,
+  onEdit,
+  onDelete,
+  dragAttributes,
+  dragListeners,
+}: {
+  application: Application
+  onEdit:   (app: Application) => void
+  onDelete?: (id: string) => void
+  dragAttributes?: DraggableAttributes
+  dragListeners?: SyntheticListenerMap
+}) {
+  const isDraggable = !!dragListeners
+  return (
+    <div>
       <div
-        className="rounded-[8px] p-3 cursor-grab active:cursor-grabbing group"
-        style={{
-          background:  '#0A0C10',
-          border:      '1px solid #1E2330',
-          transition:  'border-color 0.18s, box-shadow 0.18s',
-        }}
-        onMouseEnter={(e) => {
-          const el = e.currentTarget as HTMLElement
-          el.style.borderColor = 'rgba(0,212,255,0.35)'
-          el.style.boxShadow   = '0 0 0 1px rgba(0,212,255,0.1)'
-        }}
-        onMouseLeave={(e) => {
-          const el = e.currentTarget as HTMLElement
-          el.style.borderColor = '#1E2330'
-          el.style.boxShadow   = 'none'
-        }}
+        className={`kc-hover rounded-[8px] p-3 ${isDraggable ? 'cursor-grab active:cursor-grabbing' : ''} group`}
+        style={{ background: '#0A0C10' }}
       >
-        {/* Drag handle area */}
-        <div className="space-y-0.5 mb-2" {...attributes} {...listeners}>
+        {/* Drag handle area — only this region triggers a drag, so the
+            action buttons below stay clickable. */}
+        <div className="space-y-0.5 mb-2" {...dragAttributes} {...dragListeners}>
           <p
             className="line-clamp-2 font-heading font-bold text-[13px] leading-snug"
             style={{ color: '#E8ECF0', letterSpacing: '-0.02em' }}

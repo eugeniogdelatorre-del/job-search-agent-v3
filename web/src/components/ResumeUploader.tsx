@@ -3,7 +3,7 @@
 // CV uploader — dashed-border dark drag-drop zone.
 // Drag-over state: border → cyan, subtle bg tint.
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
@@ -13,6 +13,19 @@ export function ResumeUploader() {
   const [dragging,  setDragging]  = useState(false)
   const [uploading, setUploading] = useState(false)
   const inputRef   = useRef<HTMLInputElement>(null)
+  // Audit N-H8: AbortController so unmounting cancels the upload. The
+  // mountedRef guards against `setState on unmounted component` warnings
+  // for both the early-return paths and the post-fetch finally.
+  const abortRef   = useRef<AbortController | null>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      abortRef.current?.abort()
+    }
+  }, [])
 
   async function upload(file: File) {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
@@ -23,21 +36,34 @@ export function ResumeUploader() {
       toast.error('File must be under 5MB')
       return
     }
+    // Abort any in-flight upload before starting a new one — e.g. user
+    // drops a second file while the first is still parsing.
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
     setUploading(true)
     try {
       const form = new FormData()
       form.append('file', file)
-      const res  = await fetch('/api/cv/upload', { method: 'POST', body: form })
+      const res = await fetch('/api/cv/upload', {
+        method: 'POST',
+        body: form,
+        signal: controller.signal,
+      })
       const json = await res.json()
+      if (!mountedRef.current) return
       if (!res.ok) { toast.error(json.error || 'Upload failed'); return }
       if (json.duplicate)  toast.success('Already uploaded — using the existing version')
       else if (json.is_active) toast.success('CV uploaded and activated')
       else toast.success('CV uploaded — click activate to use it')
       router.refresh()
     } catch (e) {
+      if (controller.signal.aborted) return  // unmount or replaced — silent
+      if (!mountedRef.current) return
       toast.error(e instanceof Error ? e.message : 'Upload failed')
     } finally {
-      setUploading(false)
+      if (mountedRef.current) setUploading(false)
+      if (abortRef.current === controller) abortRef.current = null
     }
   }
 

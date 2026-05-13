@@ -1,25 +1,25 @@
 // POST /api/cv/activate
 // Body: { resume_id: uuid }
 //
-// Deactivates every other resume for this user, then flips the chosen
-// one active. Order matters because of the unique partial index
-// `idx_resumes_one_active_per_user` — doing it the other way would
-// briefly violate the constraint.
+// Atomically flips ``is_active`` set-wise via the ``set_active_resume``
+// Postgres function. The previous implementation did two separate
+// UPDATEs (deactivate-all-others, then activate-target) with a window
+// in between where the user had zero active CVs — cv_score running in
+// that window could score nothing or score against null (audit H12).
 //
-// RLS enforces ownership; the session client here can only touch the
-// current user's rows anyway.
+// Requires the SQL in ``web/sql/001_resumes_set_active.sql`` to have
+// been applied. If the RPC isn't present, the route returns 500 with a
+// clear "function not found" error pointing at the migration.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const supabase = await createClient()
+  const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'not authenticated' }, { status: 401 })
 
   let body: { resume_id?: string }
@@ -33,43 +33,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'resume_id required' }, { status: 400 })
   }
 
-  // Confirm the row exists + belongs to this user (RLS would filter it
-  // out otherwise, but we want a clear 404 instead of a silent no-op).
-  const { data: target, error: fetchErr } = await supabase
-    .from('resumes')
-    .select('id')
-    .eq('id', resumeId)
-    .eq('user_id', user.id)
-    .maybeSingle()
-  if (fetchErr) {
-    return NextResponse.json({ error: fetchErr.message }, { status: 500 })
-  }
-  if (!target) {
-    return NextResponse.json({ error: 'not found' }, { status: 404 })
-  }
-
-  const { error: deactErr } = await supabase
-    .from('resumes')
-    .update({ is_active: false })
-    .eq('user_id', user.id)
-    .neq('id', resumeId)
-  if (deactErr) {
-    return NextResponse.json(
-      { error: `deactivate failed: ${deactErr.message}` },
-      { status: 500 }
-    )
-  }
-
-  const { error: actErr } = await supabase
-    .from('resumes')
-    .update({ is_active: true })
-    .eq('id', resumeId)
-    .eq('user_id', user.id)
-  if (actErr) {
-    return NextResponse.json(
-      { error: `activate failed: ${actErr.message}` },
-      { status: 500 }
-    )
+  const { error } = await supabase.rpc('set_active_resume', {
+    p_user_id: user.id,
+    p_resume_id: resumeId,
+  })
+  if (error) {
+    // Distinguish "not found / not owned" from other failures so the
+    // client can show a sensible message (the RPC raises with that
+    // exact text — see the migration SQL).
+    if (/resume not found/i.test(error.message)) {
+      return NextResponse.json({ error: 'not found' }, { status: 404 })
+    }
+    // Audit N-M1: generic error to client; log server-side.
+    console.error('[api/cv/activate] rpc failed:', error.message, error.code)
+    return NextResponse.json({ error: 'activate failed' }, { status: 500 })
   }
 
   return NextResponse.json({ resume_id: resumeId, is_active: true })

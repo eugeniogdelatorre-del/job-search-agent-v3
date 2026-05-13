@@ -11,6 +11,43 @@ import { type NextRequest, NextResponse } from 'next/server'
 
 const PUBLIC_PATHS = ['/login', '/auth/callback']
 
+/**
+ * Audit N-C3: CSP is computed from RUNTIME env so a preview deploy with
+ * a different Supabase project picks up its host without a rebuild.
+ *
+ * Notes on the directive list:
+ *   - `worker-src 'self' blob:` — Supabase Realtime and Next instrumentation
+ *     spawn workers from `blob:` URLs that the default `script-src` fallback
+ *     would block.
+ *   - `connect-src` includes `wss://` for Supabase Realtime; `api.github.com`
+ *     is intentionally OMITTED — the browser only ever talks to our own
+ *     /api/* routes, never to GitHub directly.
+ *   - `unsafe-inline` is required on script-src + style-src for now: Next
+ *     14's hydration markers and Sonner toast inject inline styles inside
+ *     shadow DOM. Migrating to nonce-based CSP is a deliberate breaking
+ *     change; see CSP comment for the work item.
+ */
+function buildCsp(): string {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  const supabaseHost = supabaseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')
+  const supabaseOrigin = supabaseHost ? `https://${supabaseHost} wss://${supabaseHost}` : ''
+  const directives = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    `img-src 'self' data: blob: ${supabaseHost ? `https://${supabaseHost}` : ''}`.trim(),
+    `connect-src 'self' ${supabaseOrigin}`.trim(),
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "worker-src 'self' blob:",
+    "media-src 'self'",
+  ]
+  return directives.join('; ')
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })
 
@@ -23,8 +60,13 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
+          // Audit H8: forward options on the request-side write too.
+          // The previous version dropped Path/HttpOnly/Secure/SameSite/Max-Age
+          // on `request.cookies.set(name, value)`, so the rebuilt
+          // `NextResponse.next({ request })` saw incomplete cookie state.
+          // This is the canonical Supabase SSR template.
+          cookiesToSet.forEach(({ name, value, options }) =>
+            request.cookies.set({ name, value, ...options })
           )
           response = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
@@ -55,6 +97,10 @@ export async function middleware(request: NextRequest) {
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
+
+  // Apply runtime-computed CSP. Done here so the policy follows the
+  // Supabase project URL at request time, not build time.
+  response.headers.set('Content-Security-Policy', buildCsp())
 
   return response
 }

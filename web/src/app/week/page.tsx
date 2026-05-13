@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getCurrentUser } from '@/lib/supabase/server'
 import { FilterBar } from '@/components/FilterBar'
 import { JobList, JobListSkeleton } from '@/components/JobList'
 import { ExportMenu } from '@/components/ExportMenu'
@@ -15,8 +15,8 @@ export default async function WeekPage({
 }: {
   searchParams: Record<string, string | string[] | undefined>
 }) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  await createClient()  // ensure middleware-refreshed cookies are usable downstream
+  const user = await getCurrentUser()  // Audit N-M3: cached per request
   if (!user) redirect('/login')
 
   const filters = parseFilters(searchParams)

@@ -55,7 +55,17 @@ def _job_from_raw(j: dict, source_url: str, source_name: str) -> dict | None:
     """Normalise a single job dict from either the feed or the HTML blob."""
     if not isinstance(j, dict):
         return None
-    if not j.get("isActive", True):
+    # Audit L9: previously defaulted ``isActive`` to True on missing key.
+    # If CJL renames it to `is_active`/`active` (already inconsistent
+    # between the JSON feed and the HTML blob), every filled job would
+    # leak through. Check all known spellings and default to True only
+    # when none are present, so a real "active=false" still wins.
+    active_value = j.get("isActive")
+    if active_value is None:
+        active_value = j.get("is_active")
+    if active_value is None:
+        active_value = j.get("active")
+    if active_value is False:
         return None
     if j.get("filled"):
         return None

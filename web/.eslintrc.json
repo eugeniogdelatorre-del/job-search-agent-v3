@@ -1,3 +1,10 @@
 {
-  "extends": ["next/core-web-vitals", "next/typescript"]
+  // Audit L21: bump react-hooks/exhaustive-deps from `warn` (the
+  // next/core-web-vitals default) to `error` so missing useEffect /
+  // useMemo / useCallback deps block the lint job. Stale-closure bugs
+  // can only be caught at review time without this.
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "rules": {
+    "react-hooks/exhaustive-deps": "error"
+  }
 }

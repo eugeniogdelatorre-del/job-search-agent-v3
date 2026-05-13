@@ -29,7 +29,12 @@ from typing import Any
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "gates": {
-        "salary_floor_usd": 30000,
+        # NOTE: salary_floor_usd was removed on 2026-05-13. Salary is now
+        # a SOFT signal handled by ``_salary_band_penalty()`` (band
+        # [SALARY_BAND_MIN_USD, SALARY_BAND_MAX_USD] = $30k-$120k, -5
+        # outside) rather than a hard reject. Edit those constants
+        # below if you want to tune the band; the config dict no longer
+        # carries a salary field.
         "exclusions": [
             "intern", "internship", "unpaid", "volunteer",
             "senior sales", "outside sales", "door-to-door",
@@ -38,18 +43,50 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "dimensions": {
         "role_fit": {
             "weight": 0.30,
+            # Expanded 2026-05-13 (audit V-1): Web3 community/growth/brand
+            # titles are creative ("Head of Belonging", "Discord Lead",
+            # "Ecosystem Catalyst", "Brand Strategist"). Adding the common
+            # variants lifts more roles above the rule-score floor so
+            # they reach AI evaluation.
             "primary_roles": [
+                # Community
                 "community manager", "head of community", "community lead",
+                "discord manager", "discord lead", "community operations",
+                "community ops", "community strategy",
+                # Growth
                 "growth manager", "growth lead", "head of growth",
-                "kol manager", "kol lead",
+                "growth marketing", "growth strategy", "growth operations",
+                "user acquisition",
+                # Marketing / brand
                 "marketing manager", "marketing lead", "head of marketing",
+                "brand manager", "brand lead", "head of brand",
+                "brand strategy",
+                # Social / content / KOL
                 "social media manager", "content manager", "content lead",
+                "head of content", "content strategy",
+                "kol manager", "kol lead",
+                # Partnerships / BD / ecosystem
                 "partnerships manager", "partnership manager",
+                "ecosystem manager", "ecosystem lead", "head of ecosystem",
+                "business development manager", "bd manager", "bd lead",
+                # DevRel-adjacent
                 "developer relations", "devrel",
+                "developer advocate", "developer experience",
+                "developer marketing", "head of devrel",
+                # Leadership (small co's wear hats)
+                "chief of staff",
             ],
             "secondary_roles": [
+                # Original
                 "community", "growth", "marketing", "content", "partnerships",
                 "ambassador", "evangelist", "advocate", "ecosystem",
+                # Expansion
+                "discord", "moderator", "moderation",
+                "acquisition", "retention", "activation",
+                "brand", "creative", "editorial", "copywriter",
+                "bizdev", "biz dev",
+                "advocacy", "evangelism",
+                "operations",
             ],
             "title_penalties": [
                 "engineer", "solidity", "rust developer", "backend developer",
@@ -76,8 +113,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
                 "top 100", "top 50", "top 20", "backed by",
                 "a16z", "paradigm", "sequoia", "pantera", "multicoin",
             ],
-            "neutral_signals": ["series a", "growing", "funded"],
-            "penalty_signals": ["pre-seed", "no funding", "bootstrapped"],
+            # 2026-05-13 (audit H-6): "bootstrapped" moved from penalty to
+            # neutral. Profitable bootstrapped Web3 companies are often
+            # a STRONG fit for community/growth/marketing roles (smaller
+            # team, more impact per hire) — penalizing them was
+            # dropping good leads below the warm threshold.
+            "neutral_signals": ["series a", "growing", "funded", "bootstrapped"],
+            "penalty_signals": ["pre-seed", "no funding"],
         },
         "geo_timezone": {
             "weight": 0.10,
@@ -106,13 +148,24 @@ DEFAULT_CONFIG: dict[str, Any] = {
 # Gates
 # ---------------------------------------------------------------------------
 
-_HOURLY = re.compile(r"\$?(\d+)\s*[-\u2013]?\s*\$?(\d*)\s*/\s*h(?:our|r)?", re.IGNORECASE)
+# Audit M17: anchor the period words with \b on BOTH sides. Without
+# leading-boundary, ``mo`` and ``month`` matched inside ``mode``, ``money``,
+# ``smooth``, etc. \u2014 false positives that gated legitimate jobs as
+# "below-floor-monthly". Same for ``mes`` and ``monthly``. The lookahead
+# at the end ensures the period word is followed by a non-word char or
+# end-of-string so ``monthsworking`` doesn't accidentally re-match.
+_PERIOD_MONTH = r"\b(?:mes|month|mo|monthly)\b"
+_PERIOD_HOUR = r"\b(?:hour|hr|h)\b"
+_HOURLY = re.compile(
+    rf"\$?(\d+)\s*[-\u2013]?\s*\$?(\d*)\s*/\s*{_PERIOD_HOUR}",
+    re.IGNORECASE,
+)
 _MONTHLY_RANGE = re.compile(
-    r"(\d{3,5})\s*[-\u2013]\s*(\d{3,5})\s*(?:USD|usd)?\s*/?(?:mes\b|month|mo\b|monthly)",
+    rf"(\d{{3,5}})\s*[-\u2013]\s*(\d{{3,5}})\s*(?:USD|usd)?\s*/?\s*{_PERIOD_MONTH}",
     re.IGNORECASE,
 )
 _MONTHLY_SINGLE = re.compile(
-    r"(\d{3,5})\s*(?:USD|usd)\s*/?\s*(?:mes\b|month|mo\b)", re.IGNORECASE
+    rf"(\d{{3,5}})\s*(?:USD|usd)\s*/?\s*{_PERIOD_MONTH}", re.IGNORECASE
 )
 
 
@@ -122,36 +175,92 @@ def _blob(job: dict) -> str:
     ).lower()
 
 
+# Audit 2026-05-13: salary is no longer a hard gate. Out-of-band salaries
+# now apply a small penalty via _salary_band_penalty() so the role is
+# still surfaced (sorted lower) instead of vanishing. Edit these bands
+# in one place; the gates and the penalty share them.
+SALARY_BAND_MIN_USD = 30_000
+SALARY_BAND_MAX_USD = 120_000
+SALARY_BAND_PENALTY = 5
+
+
 def check_gates(job: dict, config: dict) -> str | None:
-    """Return a rejection reason string, or None if all gates pass."""
+    """Return a rejection reason string, or None if all gates pass.
+
+    Salary is intentionally NOT gated here anymore — see
+    ``_salary_band_penalty()`` for the soft-signal version. The title
+    exclusion list is the only remaining hard gate.
+    """
     g = config["gates"]
     title = (job.get("title") or "").lower()
-    blob = _blob(job)
 
     # Exclusions in title
     for exc in g["exclusions"]:
         if exc in title:
             return f"title-excluded: {exc}"
 
-    # Salary floor gates (listed salary OR description hourly / monthly sniff)
-    floor = int(g.get("salary_floor_usd") or 0)
-    if floor > 0:
-        sal_max = job.get("salary_max_usd")
-        if isinstance(sal_max, int) and sal_max > 0 and sal_max < floor:
-            return f"below-floor-listed: {sal_max}"
-        m = _MONTHLY_RANGE.search(blob)
-        if m and int(m.group(2)) * 12 < floor:
-            return f"below-floor-monthly: {m.group(2)}/mo"
-        m = _MONTHLY_SINGLE.search(blob)
-        if m and int(m.group(1)) * 12 < floor:
-            return f"below-floor-monthly: {m.group(1)}/mo"
-        m = _HOURLY.search(blob)
-        if m:
-            low = int(m.group(1))
-            if 1 < low < 100 and low * 40 * 52 < floor:
-                return f"below-floor-hourly: {low}/hr"
-
     return None
+
+
+def _detect_annual_salary_from_blob(blob: str) -> tuple[int | None, int | None]:
+    """Infer (low, high) annual USD from monthly/hourly mentions in the
+    description. Returns (None, None) if nothing matches. The caller's
+    listed salary_min/max_usd takes precedence over this inference.
+    """
+    m = _MONTHLY_RANGE.search(blob)
+    if m:
+        return (int(m.group(1)) * 12, int(m.group(2)) * 12)
+    m = _MONTHLY_SINGLE.search(blob)
+    if m:
+        v = int(m.group(1)) * 12
+        return (v, v)
+    m = _HOURLY.search(blob)
+    if m:
+        low = int(m.group(1))
+        if 1 < low < 100:
+            v = low * 40 * 52
+            return (v, v)
+    return (None, None)
+
+
+def _salary_band_penalty(job: dict) -> tuple[int, str | None]:
+    """Soft penalty when the salary range falls entirely outside the
+    target band [SALARY_BAND_MIN_USD, SALARY_BAND_MAX_USD]. Returns
+    (penalty <= 0, reason or None).
+
+    Listed salary on the job row wins. If unlisted, we sniff the
+    description for monthly/hourly mentions. Missing salary altogether
+    = neutral (no penalty), since most listings don't disclose.
+    """
+    listed_min = job.get("salary_min_usd")
+    listed_max = job.get("salary_max_usd")
+    lo: int | None = listed_min if isinstance(listed_min, int) and listed_min > 0 else None
+    hi: int | None = listed_max if isinstance(listed_max, int) and listed_max > 0 else None
+
+    if lo is None and hi is None:
+        # Fall back to description sniff so a $20/hr internship still
+        # gets penalized even when the parser didn't extract salary
+        # fields directly.
+        blob = _blob(job)
+        lo, hi = _detect_annual_salary_from_blob(blob)
+
+    if lo is None and hi is None:
+        return (0, None)
+
+    # Treat a single-sided range as a point (e.g. "$150k+" → lo=150k,
+    # hi=None). For the band check, look at whichever side is known.
+    effective_high = hi if hi is not None else lo
+    effective_low = lo if lo is not None else hi
+
+    # Whole range BELOW band: max is under the band's lower bound.
+    if effective_high is not None and effective_high < SALARY_BAND_MIN_USD:
+        return (-SALARY_BAND_PENALTY,
+                f"-{SALARY_BAND_PENALTY} below-band: max={effective_high}")
+    # Whole range ABOVE band: min is over the band's upper bound.
+    if effective_low is not None and effective_low > SALARY_BAND_MAX_USD:
+        return (-SALARY_BAND_PENALTY,
+                f"-{SALARY_BAND_PENALTY} above-band: min={effective_low}")
+    return (0, None)
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +391,7 @@ def score_job(job: dict, config: dict | None = None) -> tuple[int, dict]:
     breakdown: dict[str, Any] = {
         "gate_failed": gate_reason,
         "dimensions": {},
+        "adjustments": [],
         "total": 0,
     }
 
@@ -300,6 +410,18 @@ def score_job(job: dict, config: dict | None = None) -> tuple[int, dict]:
             "reasons": reasons,
         }
 
-    total = max(0, min(100, round(weighted_total)))
+    # Salary band adjustment — see _salary_band_penalty() docstring.
+    # Penalty is a flat -5 applied AFTER the dimensions roll up, so it's
+    # small enough not to dominate a strong rule-based score but visible
+    # enough to push borderline-band roles below their neighbors.
+    salary_adj, salary_reason = _salary_band_penalty(job)
+    if salary_adj != 0:
+        breakdown["adjustments"].append({
+            "label": "salary band",
+            "value": salary_adj,
+            "reason": salary_reason,
+        })
+
+    total = max(0, min(100, round(weighted_total + salary_adj)))
     breakdown["total"] = total
     return (total, breakdown)

@@ -47,7 +47,15 @@ LOOKBACK_DAYS = 7
 
 
 def fetch_top_jobs(client, active_resume_id: str):
-    """Return up to TOP_N job_scores rows joined with their job, newest first by match_score."""
+    """Return up to TOP_N job_scores rows joined with their job, newest first by match_score.
+
+    Audit M19: previously fetched ``TOP_N * 3`` candidates and filtered
+    ``is_active`` + ``gate_failed`` in Python. When inactive/gated rows
+    clustered at the top of the score distribution the email came up
+    short — e.g. 30 candidates fetched, 28 dropped, only 2 made the
+    digest. Push both filters into SQL via the inner join on ``jobs``
+    so the ``.limit(TOP_N)`` budget actually buys ``TOP_N`` rows.
+    """
     if client is None:
         return []
     cutoff = (datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)).isoformat()
@@ -56,15 +64,19 @@ def fetch_top_jobs(client, active_resume_id: str):
             client.table("job_scores")
             .select(
                 "match_score, strengths, gaps, verdict_one_liner, scored_at, "
-                "jobs(id, title, company, apply_url, source_url, source, "
+                # !inner so the parent (job_scores) is filtered by
+                # embed columns instead of nullifying its embed slot.
+                "jobs!inner(id, title, company, apply_url, source_url, source, "
                 "function_category, vertical, seniority, remote_status, "
                 "salary_min_usd, salary_max_usd, first_seen_at, is_active, "
                 "score_breakdown)"
             )
             .eq("resume_id", active_resume_id)
             .gte("scored_at", cutoff)
+            .eq("jobs.is_active", True)
+            .is_("jobs.score_breakdown->>gate_failed", "null")
             .order("match_score", desc=True)
-            .limit(TOP_N * 3)  # room to filter out inactive/gated rows
+            .limit(TOP_N)
             .execute()
         )
         rows = getattr(resp, "data", []) or []
@@ -72,21 +84,9 @@ def fetch_top_jobs(client, active_resume_id: str):
         print(f"  [summary] fetch failed: {e}", file=sys.stderr)
         return []
 
-    # Drop rows where the job was since deleted, deactivated, or gate-failed
-    filtered = []
-    for r in rows:
-        job = r.get("jobs")
-        if not job:
-            continue
-        if job.get("is_active") is False:
-            continue
-        bd = job.get("score_breakdown") or {}
-        if isinstance(bd, dict) and bd.get("gate_failed"):
-            continue
-        filtered.append(r)
-        if len(filtered) >= TOP_N:
-            break
-    return filtered
+    # Defensive: filter any row whose embedded job is missing (shouldn't
+    # happen with !inner, but better than crashing the email render).
+    return [r for r in rows if r.get("jobs")]
 
 
 def _fmt_salary(mn, mx) -> str:

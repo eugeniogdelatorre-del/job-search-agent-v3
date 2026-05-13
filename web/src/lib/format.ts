@@ -1,14 +1,21 @@
 export function formatSalary(min: number | null, max: number | null): string | null {
-  if (!min && !max) return null
+  // Audit M13: previously used truthy checks (`!min && !max`), so a
+  // range of (0, 200000) returned "$0" because `!0` short-circuited
+  // the range branch. Explicit null checks avoid the trap.
+  if (min == null && max == null) return null
   const fmt = (n: number) => (n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`)
-  if (min && max && min !== max) return `${fmt(min)}–${fmt(max)}`
-  return fmt(min ?? max!)
+  if (min != null && max != null && min !== max) return `${fmt(min)}–${fmt(max)}`
+  // At this point at least one is non-null; pick the non-null side.
+  const v = min ?? max
+  return v == null ? null : fmt(v)
 }
 
 export function formatRelativeDate(iso: string): string {
   const then = new Date(iso).getTime()
   const now = Date.now()
-  const mins = Math.round((now - then) / 60000)
+  // Audit L7: clamp negative deltas to 0 so future-dated rows / clock
+  // skew don't print "NaN ago" or "-3m ago".
+  const mins = Math.max(0, Math.round((now - then) / 60000))
   if (mins < 1) return 'just now'
   if (mins < 60) return `${mins}m ago`
   const hours = Math.round(mins / 60)

@@ -59,21 +59,60 @@ CACHE_WRITE_MULTIPLIER = 1.25
 CACHE_READ_MULTIPLIER = 0.10
 
 # Warm threshold — jobs below this rule-based score are skipped for AI scoring.
-# Restored to 60 (the original spec value in COST_MATH.md) after the 40
-# experiment was driving cv_score volume ~15x over the cost model.
-# classify.py also uses 60 to skip cold jobs entirely; keep these in sync.
-WARM_THRESHOLD = 60
+# Lowered from 60 → 40 (2026-05-13): the rule scorer is keyword-heavy on the
+# title; creative Web3 titles like "Head of Brand", "Discord Lead",
+# "Ecosystem Catalyst" were silently scoring 40-59 and never reaching the AI.
+# At 40 we send substantially more jobs to Haiku, but per-stage budget cap
+# ($5/mo for cv_score) absorbs it comfortably. classify.py uses the same
+# constant; keep them in sync (it imports from here).
+WARM_THRESHOLD = 40
 
-# Skip cv_score for jobs first seen more than this many days ago. The scrape
-# pass keeps a job alive (is_active=true) for as long as the source still
-# lists it, but we don't need to keep paying to score every backlog row that
-# has been eligible for weeks and never got picked up — those are stale.
-MAX_JOB_AGE_DAYS = 15
+# Skip cv_score for jobs first seen more than this many days ago. Bumped
+# 15 → 30 (2026-05-13) to match retention.INACTIVE_AFTER_DAYS so newly-
+# activated CVs can rescore the full active backlog (was stranding jobs
+# first-seen 16-30 days ago after a CV swap).
+MAX_JOB_AGE_DAYS = 30
 
-# Cap per run. The cache's 5-min TTL means every ~250 requests is a new
-# cache-write window; a single batch of 500 comfortably fits inside one
-# window. Over 500 and we'd risk re-paying the write cost mid-batch.
-MAX_JOBS_PER_RUN = 500
+# Cap per run. Default 1000 (bumped from 500 on 2026-05-13). The 5-min
+# ephemeral cache TTL means a 1000-job batch may cross 2-3 cache-write
+# windows and re-pay the write cost (~$1 extra one-time), but the
+# total cost across N jobs is the same whether we run 1×1000 or 2×500 —
+# 1000 just clears the queue in one cron day instead of two.
+MAX_JOBS_PER_RUN = 1000
+
+# Larger ceiling used automatically when we detect a "fresh CV" backlog
+# (see ``_detect_backlog_mode()`` below). Triggered when there are very
+# few job_scores rows for the active resume — usually because the CV
+# was just activated. We have room to drain the queue in one go without
+# tripping the $5/mo cv_score budget cap.
+MAX_JOBS_BACKLOG_DRAIN = 2000
+
+# When fewer than this many jobs are already scored for the active CV,
+# treat as fresh-CV backlog and switch to MAX_JOBS_BACKLOG_DRAIN. 100
+# is a comfortable margin above zero (covers the case where someone
+# scored a tiny test batch before activating the new CV in earnest).
+BACKLOG_MODE_THRESHOLD = 100
+
+# ─── CV-aware rescue (audit H, 2026-05-13) ──────────────────────────────────
+# Jobs with rule-score between RESCUE_FLOOR and WARM_THRESHOLD are
+# below the AI-scoring cutoff, but if the description matches enough
+# of the candidate's structured skills they get promoted into the
+# batch anyway. Catches roles with creative titles whose rule-score
+# is just-below-warm but content is actually a strong fit.
+#
+# Floor = WARM_THRESHOLD - 5 = 35 by default. Anything lower turns
+# the rescue into a flood — most jobs scoring 30-34 are genuinely
+# off-profile.
+RESCUE_FLOOR = WARM_THRESHOLD - 5
+# At least this many distinct skill-graph terms must appear in the
+# job's title+description blob for a rescue. 3 is empirically a
+# decent signal-to-noise ratio.
+RESCUE_MIN_SKILL_HITS = 3
+# Cap how many rescued jobs we add to ANY single batch. Even if the
+# rescue pipeline finds 200 borderline matches, only the top RESCUE_CAP
+# go in — keeps the AI cost bounded and lets the main eligible set
+# stay the primary signal.
+RESCUE_CAP_PER_RUN = 100
 
 DESCRIPTION_MAX_CHARS = 3000  # per §4.2
 
@@ -128,6 +167,17 @@ CANDIDATE RESUME:
 
 SYSTEM_SUFFIX = "\n---"
 
+# When a structured skill graph is available, the system prompt switches
+# from "read this resume text" to "score against this graph". The model
+# is explicitly told not to invent skills outside the graph, which
+# eliminates the "job mentions Rust → infer candidate has Rust" failure
+# mode and makes scoring reproducible across runs.
+SYSTEM_PREFIX_GRAPH = SYSTEM_PREFIX.replace(
+    "CANDIDATE RESUME:",
+    "CANDIDATE SKILL GRAPH (a structured extraction from the resume — do NOT\n"
+    "score skills not listed below; treat absence as a gap):",
+)
+
 USER_TEMPLATE = """\
 Score this job against the candidate resume above.
 
@@ -173,18 +223,51 @@ Rules:
 
 
 def _fetch_active_resume(client) -> dict | None:
+    """Return the active CV row, or None.
+
+    Audit H27: previously used ``.maybe_single()`` which RAISES if more
+    than one row matches (e.g. mid-migration with two active resumes by
+    accident). The exception bubbled up to the bare ``except``, which
+    then logged a misleading "fetch active resume failed" instead of
+    "you have multiple active resumes." Switch to ``.limit(1)`` so the
+    function returns the first match deterministically even when the
+    invariant is broken — operator can clean up at their leisure.
+    """
     if client is None:
         return None
+    # Select skill_graph too — cv_score prefers it over parsed_text when
+    # present (see _resolve_cv_payload below). Gracefully degrades if the
+    # column doesn't exist yet (pre-migration).
+    select_cols = "id,parsed_text,char_count,skill_graph"
     try:
         resp = (
             client.table("resumes")
-            .select("id,parsed_text,char_count")
+            .select(select_cols)
             .eq("is_active", True)
-            .maybe_single()
+            .order("id")  # deterministic tiebreaker if multiple are active
+            .limit(1)
             .execute()
         )
-        return getattr(resp, "data", None)
+        rows = getattr(resp, "data", None) or []
+        return rows[0] if rows else None
     except Exception as e:
+        msg = str(e)
+        # Column missing → retry without skill_graph (pre-migration env).
+        if "skill_graph" in msg or "PGRST204" in msg or "42703" in msg:
+            try:
+                resp = (
+                    client.table("resumes")
+                    .select("id,parsed_text,char_count")
+                    .eq("is_active", True)
+                    .order("id")
+                    .limit(1)
+                    .execute()
+                )
+                rows = getattr(resp, "data", None) or []
+                return rows[0] if rows else None
+            except Exception as e2:
+                print(f"  [supabase] fetch active resume failed: {e2}", file=sys.stderr)
+                return None
         print(f"  [supabase] fetch active resume failed: {e}", file=sys.stderr)
         return None
 
@@ -254,6 +337,11 @@ def _fetch_eligible_jobs(client, already_scored: set[str], limit: int) -> list[d
                 .gte("score_total", WARM_THRESHOLD)
                 .gte("first_seen_at", cutoff_iso)
                 .order("score_total", desc=True)
+                # Audit H26: secondary sort key. Without it, rows that tie
+                # on score_total can drift across pages and either get
+                # skipped or appear in two adjacent windows. ``id`` is
+                # unique, so pagination is stable.
+                .order("id", desc=False)
                 .range(offset, offset + PAGE - 1)  # inclusive on both ends
                 .execute()
             )
@@ -275,6 +363,94 @@ def _fetch_eligible_jobs(client, already_scored: set[str], limit: int) -> list[d
     return eligible[:limit]
 
 
+def _skill_terms_from_graph(skill_graph: dict | None) -> list[str]:
+    """Extract lower-cased skill names from a stored skill_graph row.
+    Used by ``_fetch_rescue_candidates`` to do the title+description
+    keyword sniff. Filters out very short tokens that would match
+    spuriously (e.g. "C", "Go").
+    """
+    if not isinstance(skill_graph, dict):
+        return []
+    skills = skill_graph.get("skills") or []
+    out: list[str] = []
+    for s in skills:
+        if not isinstance(s, dict):
+            continue
+        name = (s.get("name") or "").strip().lower()
+        if len(name) >= 3:
+            out.append(name)
+    return out
+
+
+def _fetch_rescue_candidates(
+    client,
+    already_scored: set[str],
+    skill_terms: list[str],
+    limit: int,
+) -> list[dict]:
+    """Pull borderline jobs (RESCUE_FLOOR <= score_total < WARM_THRESHOLD)
+    whose title+description contains at least RESCUE_MIN_SKILL_HITS
+    distinct skill_graph terms.
+
+    Returns up to ``limit`` rows in score_total-desc order. Filters
+    is_active + geo_filtered same as the primary fetch, so a rescued
+    job has cleared every other gate — only the rule-score was a hair
+    below warm.
+
+    Returns [] (silently) if the skill_graph is empty or missing, so
+    pre-extraction runs gracefully skip the rescue without erroring.
+    """
+    if client is None or not skill_terms or limit <= 0:
+        return []
+    cutoff_iso = (
+        datetime.now(timezone.utc) - timedelta(days=MAX_JOB_AGE_DAYS)
+    ).isoformat()
+
+    PAGE = 500
+    HARD_CAP = 5000
+    out: list[dict] = []
+    offset = 0
+
+    try:
+        while len(out) < limit and offset < HARD_CAP:
+            resp = (
+                client.table("jobs")
+                .select(
+                    "id,title,company,location,remote_status,description,"
+                    "function_category,vertical,seniority"
+                )
+                .eq("is_active", True)
+                .eq("geo_filtered", True)
+                .gte("score_total", RESCUE_FLOOR)
+                .lt("score_total", WARM_THRESHOLD)
+                .gte("first_seen_at", cutoff_iso)
+                .order("score_total", desc=True)
+                .order("id", desc=False)
+                .range(offset, offset + PAGE - 1)
+                .execute()
+            )
+            rows = getattr(resp, "data", []) or []
+            if not rows:
+                break
+            for r in rows:
+                if str(r["id"]) in already_scored:
+                    continue
+                blob = (
+                    (r.get("title") or "") + " " + (r.get("description") or "")
+                ).lower()
+                hits = sum(1 for t in skill_terms if t in blob)
+                if hits >= RESCUE_MIN_SKILL_HITS:
+                    out.append(r)
+                    if len(out) >= limit:
+                        break
+            offset += PAGE
+    except Exception as e:
+        print(f"  [supabase] rescue fetch failed: {e}", file=sys.stderr)
+        return out
+
+    return out[:limit]
+
+
 def _build_user_message(job: dict) -> str:
     desc = (job.get("description") or "").strip()[:DESCRIPTION_MAX_CHARS]
     return USER_TEMPLATE.format(
@@ -289,11 +465,56 @@ def _build_user_message(job: dict) -> str:
     )
 
 
-def _build_batch_requests(jobs: list[dict], resume_text: str) -> list[dict]:
-    """Build Batch requests. System is cached via cache_control: ephemeral."""
+def _resolve_cv_payload(resume: dict, supabase_client, anthropic_client) -> tuple[str, str]:
+    """Decide what to put in the system prompt: structured skill graph
+    (preferred) or raw parsed_text (legacy fallback).
+
+    Resolution:
+      1. If resume.skill_graph is a non-empty dict → use it.
+      2. Else attempt lazy extraction via cv_extract.extract_and_store_skill_graph;
+         on success, use the new graph.
+      3. Else fall back to parsed_text.
+
+    Returns (mode, payload_string) where mode is "graph" or "text".
+    """
+    import json as _json
+    from scraper.cv_extract import extract_and_store_skill_graph
+
+    graph = resume.get("skill_graph") if isinstance(resume, dict) else None
+    if isinstance(graph, dict) and graph:
+        return ("graph", _json.dumps(graph, ensure_ascii=False, indent=2))
+
+    parsed_text = (resume.get("parsed_text") or "").strip()
+    if anthropic_client is not None and parsed_text:
+        resume_id = str(resume.get("id") or "")
+        if resume_id:
+            print(
+                "  [cv_score] no skill_graph on resume — extracting once "
+                "(stored for next run)…"
+            )
+            extracted = extract_and_store_skill_graph(
+                supabase_client, anthropic_client, resume_id, parsed_text,
+            )
+            if extracted:
+                return ("graph", _json.dumps(extracted, ensure_ascii=False, indent=2))
+
+    # Legacy path: just dump the parsed text.
+    return ("text", parsed_text)
+
+
+def _build_batch_requests(jobs: list[dict], cv_payload: tuple[str, str]) -> list[dict]:
+    """Build Batch requests. System is cached via cache_control: ephemeral.
+
+    ``cv_payload`` is (mode, content) from _resolve_cv_payload. The system
+    prompt prefix changes based on mode so the model knows whether it's
+    looking at a structured graph (and must not invent skills) or at raw
+    CV text (legacy free-form interpretation).
+    """
+    mode, content = cv_payload
+    prefix = SYSTEM_PREFIX_GRAPH if mode == "graph" else SYSTEM_PREFIX
     system_block = {
         "type": "text",
-        "text": SYSTEM_PREFIX + resume_text + SYSTEM_SUFFIX,
+        "text": prefix + content + SYSTEM_SUFFIX,
         "cache_control": {"type": "ephemeral"},
     }
     out = []
@@ -346,6 +567,38 @@ def _clamp_match_score(value) -> int | None:
     return n
 
 
+def _safe_int(v, default: int = 0) -> int:
+    """Coerce model output to int without ever raising.
+
+    Audit C8: ``int(cell.get("score") or 0)`` raises ValueError on any
+    non-integer string ("7.5", "ten", "")  and the exception propagated
+    out of the result iterator below, aborting the *entire* batch
+    write-back. We accept floats (truncate) and string-floats; anything
+    else falls back to ``default``.
+    """
+    if v is None:
+        return default
+    if isinstance(v, bool):
+        # ``isinstance(True, int)`` is True in Python — handle first.
+        return default
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float):
+        return int(v)
+    if isinstance(v, str):
+        s = v.strip()
+        if not s:
+            return default
+        try:
+            return int(s)
+        except ValueError:
+            try:
+                return int(float(s))
+            except ValueError:
+                return default
+    return default
+
+
 def _parsed_to_row(parsed: dict, job_id: str, resume_id: str) -> dict | None:
     # location filter — score 0 is valid and intentional
     location_eligible = parsed.get("location_eligible")
@@ -376,7 +629,7 @@ def _parsed_to_row(parsed: dict, job_id: str, resume_id: str) -> dict | None:
     for key in ("skill_match", "industry_fit", "title_alignment", "seniority", "requirements", "geography"):
         cell = dims_raw.get(key) or {}
         dims[key] = {
-            "score": int(cell.get("score") or 0),
+            "score": _safe_int(cell.get("score")),
             "notes": str(cell.get("notes") or "")[:80],
         }
 
@@ -386,12 +639,12 @@ def _parsed_to_row(parsed: dict, job_id: str, resume_id: str) -> dict | None:
             continue
         adjustments.append({
             "label": str(adj.get("label") or "")[:60],
-            "value": int(adj.get("value") or 0),
+            "value": _safe_int(adj.get("value")),
         })
 
     breakdown = {
         "location_eligible": True,
-        "subtotal": int(parsed.get("subtotal") or 0),
+        "subtotal": _safe_int(parsed.get("subtotal")),
         "dimensions": dims,
         "adjustments": adjustments,
         "strengths": _clean_str_list(parsed.get("strengths")),
@@ -535,15 +788,67 @@ def main() -> int:
     already = _fetch_already_scored_ids(sb, resume_id) if sb else set()
     print(f"  already scored for this CV: {len(already)}")
 
-    jobs = _fetch_eligible_jobs(sb, already, args.limit) if sb else []
+    # Backlog-mode auto-bump: if very few jobs are scored for this CV
+    # (typical after a CV swap or after we lowered WARM_THRESHOLD), use
+    # the larger limit so we drain the queue in one cron day instead of
+    # spreading it across multiple. CLI --limit always wins.
+    effective_limit = args.limit
+    cli_limit_explicit = args.limit != MAX_JOBS_PER_RUN
+    if not cli_limit_explicit and len(already) < BACKLOG_MODE_THRESHOLD:
+        effective_limit = MAX_JOBS_BACKLOG_DRAIN
+        print(
+            f"  backlog mode: scored={len(already)} < {BACKLOG_MODE_THRESHOLD} "
+            f"→ raising limit {MAX_JOBS_PER_RUN}→{effective_limit} for this run"
+        )
+
+    jobs = _fetch_eligible_jobs(sb, already, effective_limit) if sb else []
+    primary_count = len(jobs)
+
+    # Audit H (2026-05-13): CV-aware rescue — borderline jobs (35-39)
+    # that hit 3+ skill_graph terms get pulled in despite rule-score
+    # below WARM_THRESHOLD. The rescue pulls up to RESCUE_CAP_PER_RUN
+    # extra rows OR enough to backfill the unused capacity from the
+    # primary fetch — whichever is smaller. Keeps the batch within
+    # ``effective_limit``.
+    rescue_budget = min(RESCUE_CAP_PER_RUN, max(0, effective_limit - len(jobs)))
+    if sb and rescue_budget > 0:
+        skill_terms = _skill_terms_from_graph(resume.get("skill_graph"))
+        if skill_terms:
+            rescued = _fetch_rescue_candidates(sb, already, skill_terms, rescue_budget)
+            if rescued:
+                # Tag rescued jobs so the parse loop / logs can tell them
+                # apart from primary picks. Doesn't affect cv_score's prompt.
+                for r in rescued:
+                    r["_rescued"] = True
+                jobs.extend(rescued)
+                print(
+                    f"  rescue: +{len(rescued)} borderline jobs "
+                    f"(score {RESCUE_FLOOR}-{WARM_THRESHOLD - 1}, "
+                    f">= {RESCUE_MIN_SKILL_HITS} skill matches)"
+                )
+        else:
+            print("  rescue: skipped (skill_graph empty — will fill on next run)")
+
     if not jobs:
         print("  nothing eligible — no jobs with score_total >= "
-              f"{WARM_THRESHOLD} that haven't been scored yet")
+              f"{WARM_THRESHOLD} that haven't been scored yet "
+              f"(and no rescue candidates between {RESCUE_FLOOR} and {WARM_THRESHOLD})")
         return 0
-    print(f"  {len(jobs)} jobs to score")
+    print(f"  {len(jobs)} jobs to score "
+          f"(primary={primary_count} rescued={len(jobs) - primary_count})")
+
+    # We need the Anthropic client for both lazy skill-graph extraction
+    # AND the batch submission. Initialise it once here and pass through.
+    anthropic_for_extract = None
+    if not args.dry:
+        anthropic_for_extract = _get_anthropic_client()
+        if anthropic_for_extract is None:
+            return 2
+    cv_payload = _resolve_cv_payload(resume, sb, anthropic_for_extract)
+    print(f"  cv payload mode={cv_payload[0]}  chars={len(cv_payload[1])}")
 
     if args.dry:
-        payload = _build_batch_requests(jobs[:1], resume_text)
+        payload = _build_batch_requests(jobs[:1], cv_payload)
         print("\n  [dry] sample request (system truncated to 400 chars):")
         print("---")
         sys_text = payload[0]["params"]["system"][0]["text"]
@@ -554,11 +859,14 @@ def main() -> int:
         print(f"  [dry] would submit {len(jobs)} requests to Batch API")
         return 0
 
-    anthropic = _get_anthropic_client()
+    # Reuse the client we created above for skill-graph extraction
+    # rather than spawning a second one — same key, same connection
+    # pool, simpler code path.
+    anthropic = anthropic_for_extract or _get_anthropic_client()
     if anthropic is None:
         return 2
 
-    payload = _build_batch_requests(jobs, resume_text)
+    payload = _build_batch_requests(jobs, cv_payload)
     batch = _submit_batch(anthropic, payload)
     if batch is None:
         return 4
@@ -578,43 +886,84 @@ def main() -> int:
     job_ids = {str(j["id"]) for j in jobs}
     ok = 0
     errored = 0
-    parse_failed = 0
+    # Audit M2: split the old `parse_failed` counter. Conflating JSON parse
+    # errors with "model returned an unknown custom_id" made the metric
+    # useless for diagnosis. Keep them apart.
+    json_parse_failed = 0
+    unknown_custom_id = 0
+    row_build_failed = 0
+
+    def _record_usage(msg) -> None:
+        """Pull token usage off any message-shaped object. Audit M1:
+        previously we only counted on outcome_type='succeeded', but
+        Anthropic charges input tokens for errored requests too, so the
+        budget tracker silently drifted down with even a 1-2% error rate.
+        Counting from every message present (succeeded OR errored)
+        restores accuracy.
+        """
+        nonlocal input_tokens_total, cache_write_total, cache_read_total, output_tokens_total
+        usage = getattr(msg, "usage", None)
+        if not usage:
+            return
+        input_tokens_total += getattr(usage, "input_tokens", 0) or 0
+        cache_write_total += getattr(usage, "cache_creation_input_tokens", 0) or 0
+        cache_read_total += getattr(usage, "cache_read_input_tokens", 0) or 0
+        output_tokens_total += getattr(usage, "output_tokens", 0) or 0
 
     for result in anthropic.messages.batches.results(batch_id):
         custom_id = getattr(result, "custom_id", None)
         outcome = getattr(result, "result", None)
         outcome_type = getattr(outcome, "type", None)
-        if outcome_type != "succeeded":
-            errored += 1
-            continue
         message = getattr(outcome, "message", None)
-        if not message:
+        # Always try to record usage — Anthropic bills input tokens even
+        # when outcome_type is "errored", so skipping here is what made
+        # the budget log under-count (M1).
+        if message is not None:
+            _record_usage(message)
+        if outcome_type != "succeeded" or message is None:
             errored += 1
             continue
-        usage = getattr(message, "usage", None)
-        if usage:
-            input_tokens_total += getattr(usage, "input_tokens", 0) or 0
-            cache_write_total += getattr(usage, "cache_creation_input_tokens", 0) or 0
-            cache_read_total += getattr(usage, "cache_read_input_tokens", 0) or 0
-            output_tokens_total += getattr(usage, "output_tokens", 0) or 0
         text = ""
         for block in getattr(message, "content", []) or []:
             if getattr(block, "type", None) == "text":
                 text = getattr(block, "text", "") or ""
                 break
-        parsed = _extract_json(text)
-        if not parsed or custom_id not in job_ids:
-            parse_failed += 1
+        if custom_id not in job_ids:
+            # Contract violation — Anthropic returned a custom_id we
+            # didn't submit. Not a parse failure (would be a model bug
+            # or a wiring bug), so track separately.
+            unknown_custom_id += 1
             continue
-        row = _parsed_to_row(parsed, custom_id, resume_id)
+        parsed = _extract_json(text)
+        if not parsed:
+            json_parse_failed += 1
+            continue
+        # Audit C8: even with _safe_int below, a malformed model output
+        # (unexpected nested type, etc.) shouldn't be allowed to escape
+        # this iterator. Catching ensures one bad row never aborts the
+        # whole 500-row write-back.
+        try:
+            row = _parsed_to_row(parsed, custom_id, resume_id)
+        except Exception as e:
+            print(
+                f"  [parse] custom_id={custom_id} threw {type(e).__name__}: {e}",
+                file=sys.stderr,
+            )
+            row_build_failed += 1
+            continue
         if row is None:
-            parse_failed += 1
+            row_build_failed += 1
             continue
         rows_to_write.append(row)
         ok += 1
 
+    # Roll up the three failure counters for backwards-compat log greps
+    # while keeping the breakdown visible.
+    parse_failed = json_parse_failed + row_build_failed + unknown_custom_id
     print(
-        f"  [parse] ok={ok}  parse_failed={parse_failed}  errored={errored}  "
+        f"  [parse] ok={ok}  parse_failed={parse_failed}  "
+        f"(json={json_parse_failed} build={row_build_failed} "
+        f"unknown_id={unknown_custom_id})  errored={errored}  "
         f"input={input_tokens_total}  cache_write={cache_write_total}  "
         f"cache_read={cache_read_total}  output={output_tokens_total}"
     )

@@ -1,26 +1,45 @@
 name: scrape
 
 # Once-daily at 04:00 UTC (= 01:00 ART). Runs all sources in a single job.
-# geo_filter.yml fires at 06:00 UTC and cv_score.yml at 07:00 UTC.
+#
+# Audit H4 rework (2026-05-12): downstream stages no longer run on their
+# own time-based cron — they fire via `workflow_run` on this workflow's
+# success, eliminating the fragile 04:00→05:00→06:00→07:00 daisy-chain
+# that broke if scrape overran 60min. Stage failure is reported via the
+# notify_on_failure job (audit H5).
+#
 # workflow_dispatch keeps an optional 'group' input for debugging partial runs.
 
 on:
-  # Resumed 2026-05-07 after the source-audit + cost-cut work landed.
-  # 04:00 UTC = 01:00 ART. classify @ 05:00, geo_filter @ 06:00,
-  # cv_score @ 07:00 → all done by ~07:55 UTC = 04:55 ART, well before
-  # the 7-AM-ART (10:00 UTC) deadline.
   schedule:
     - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
+      # Audit M22: typed inputs fail at submit time instead of deep
+      # inside argparse with a stale runner minute spent.
       group:
-        description: "Optional: scrape only this group (1 or 2). Blank = all sources."
+        description: "Optional: scrape only this group. Blank = all sources."
         required: false
+        type: choice
+        options:
+          - ""
+          - "1"
+          - "2"
         default: ""
 
+permissions:
+  contents: read
+
+# Audit H2: shared `stage-scrape` group with pipeline.yml's scrape job
+# means the two workflows can't run scrape simultaneously, eliminating
+# the double-write window when a manual pipeline.yml dispatch overlapped
+# with the 04:00 UTC cron.
+# Audit H3: cancel-in-progress flipped to false — scrape is not
+# idempotent enough to be killed mid-write (last_seen_at would be
+# half-updated and retention would misclassify a partial run).
 concurrency:
-  group: scrape
-  cancel-in-progress: true
+  group: stage-scrape
+  cancel-in-progress: false
 
 jobs:
   scrape:
@@ -30,9 +49,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Audit H6: fail fast on missing secrets with a clear list, instead
+      # of a cryptic Python traceback deep into the run.
+      - name: Check required secrets
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -z "${SUPABASE_URL:-}" ]         && missing+=("SUPABASE_URL")
+          [ -z "${SUPABASE_SERVICE_KEY:-}" ] && missing+=("SUPABASE_SERVICE_KEY")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}" >&2
+            exit 1
+          fi
+          echo "All required secrets present."
+
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.7"
           cache: "pip"
           cache-dependency-path: scraper/requirements.txt
 
@@ -43,9 +80,28 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # Quoted as data via env var — never interpolate ${{ inputs.* }}
+          # directly into a `run:` block. See SECURITY note in repo audit.
+          GROUP_INPUT: ${{ github.event.inputs.group }}
         run: |
-          if [ -n "${{ github.event.inputs.group }}" ]; then
-            python scraper/scrape.py --group ${{ github.event.inputs.group }}
+          if [ -n "$GROUP_INPUT" ]; then
+            python scraper/scrape.py --group "$GROUP_INPUT"
           else
             python scraper/scrape.py
           fi
+
+  # Audit H5: surface failures to the operator instead of relying on the
+  # next-morning "no fresh jobs" tell. `if: failure()` fires only when the
+  # `scrape` job actually failed (not when it was skipped or cancelled).
+  notify_on_failure:
+    needs: [scrape]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send failure email via Resend
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 scraper/notify.py

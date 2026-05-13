@@ -61,6 +61,12 @@ export function FilterBar({ hidePostedWithin }: Props) {
 
   const val        = (k: string) => searchParams.get(k) ?? ''
   const hasFilters = FILTER_KEYS.some((k) => searchParams.get(k))
+  // Audit M16: <input defaultValue=…> only reads on mount. Back/Forward
+  // changes the URL but doesn't remount, so the input keeps its old
+  // text and the visible filter disagrees with the URL state. Pinning
+  // a `key` derived from the URL forces a remount whenever the search
+  // params change, so the defaultValue is re-read.
+  const urlKey = searchParams.toString()
 
   return (
     <div
@@ -69,6 +75,7 @@ export function FilterBar({ hidePostedWithin }: Props) {
     >
       {/* Search input */}
       <input
+        key={`q-${urlKey}`}
         type="search"
         placeholder="Search title / company"
         className="focus:outline-none focus:ring-0"
@@ -116,8 +123,8 @@ export function FilterBar({ hidePostedWithin }: Props) {
       <div style={{ width: 1, height: 24, background: '#1E2330', flexShrink: 0 }} />
 
       {/* Numeric inputs */}
-      <input type="number" placeholder="min $"   className="no-spin" style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('salaryFloor')} onFocus={onFocus} onBlur={(e) => { onBlur(e); update('salaryFloor', e.target.value) }} />
-      <input type="number" placeholder="match ≥" className="no-spin" style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('matchMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('matchMin',    e.target.value) }} />
+      <input key={`salaryFloor-${urlKey}`} type="number" placeholder="min $"   className="no-spin" style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('salaryFloor')} onFocus={onFocus} onBlur={(e) => { onBlur(e); update('salaryFloor', e.target.value) }} />
+      <input key={`matchMin-${urlKey}`}    type="number" placeholder="match ≥" className="no-spin" style={{ ...INPUT_BASE, width: 80 }} min={0} defaultValue={val('matchMin')}    onFocus={onFocus} onBlur={(e) => { onBlur(e); update('matchMin',    e.target.value) }} />
 
       {!hidePostedWithin && (
         <CustomSelect
