@@ -45,6 +45,14 @@ export async function DELETE(req: NextRequest) {
   // started — which could be THIS one if it was just deactivated.
   // Deleting now would orphan the job_scores rows the running workflow
   // is about to write (or break the FK if one exists).
+  //
+  // Audit M7 (2026-05-14): the in-flight guard relies on GITHUB_PAT
+  // being set. In production we now refuse the delete entirely if it
+  // isn't — the guard's whole point is to protect a DB invariant and
+  // silently skipping it on prod would let a CV deletion race with an
+  // in-flight cv_score and orphan rows. In development (NODE_ENV !==
+  // 'production') we keep the skip-with-warning behaviour so local
+  // testing doesn't require a real PAT.
   const pat = process.env.GITHUB_PAT
   if (pat) {
     const inflight = await findInflightDispatch(GH_OWNER, GH_REPO, 'cv_score.yml', pat)
@@ -58,6 +66,14 @@ export async function DELETE(req: NextRequest) {
         { status: 409 },
       )
     }
+  } else if (process.env.NODE_ENV === 'production') {
+    console.error('[api/cv/delete] GITHUB_PAT unset in production — refusing delete to preserve N-H9 invariant')
+    return NextResponse.json(
+      { error: 'CV deletion temporarily unavailable — admin must set GITHUB_PAT' },
+      { status: 503 },
+    )
+  } else {
+    console.warn('[api/cv/delete] GITHUB_PAT unset — proceeding without in-flight check (non-production)')
   }
 
   const { error } = await supabase

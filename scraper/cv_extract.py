@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 if __package__ in (None, ""):
@@ -41,6 +42,14 @@ from scraper._anthropic_batch import extract_json as _extract_json
 # tiny — this runs once per CV, not per job.
 MODEL = "claude-haiku-4-5-20251001"
 MAX_CV_CHARS = 15_000   # cap input so a malformed parse can't blow up
+
+# Real-time (non-batch) Haiku 4.5 pricing — 2× the batch rate used in
+# classify.py / cv_score.py. cv_extract is called once per CV swap, so
+# the ~$0.005 cost is negligible in absolute terms, but Audit H2 flagged
+# that the call wasn't writing to spend_tracking — the MTD sum used by
+# budget.py was silently under-counting.
+REALTIME_INPUT_PER_MTOK = 1.00
+REALTIME_OUTPUT_PER_MTOK = 5.00
 
 SYSTEM_PROMPT = """\
 You are a careful resume analyst. Read a candidate's resume and return a
@@ -166,12 +175,56 @@ def _sanitize(graph: dict) -> dict:
     return out
 
 
-def extract_skill_graph(anthropic_client, resume_text: str) -> dict | None:
+def _log_spend(supabase_client, msg, notes: str) -> None:
+    """Audit H2: write a row to spend_tracking so MTD sums see this call.
+
+    Pulls token counts from the real Anthropic response (``msg.usage``)
+    when available; falls back to zero so the row is never bogus. The
+    operation tag ``cv_extract`` is distinct from ``cv_score`` so the
+    /settings breakdown is honest about where the spend comes from.
+    Fail-soft like the other ``_log_spend`` helpers (a Supabase hiccup
+    must not block the extraction return value).
+    """
+    if supabase_client is None:
+        return
+    usage = getattr(msg, "usage", None)
+    in_tok  = int(getattr(usage, "input_tokens",  0) or 0) if usage else 0
+    out_tok = int(getattr(usage, "output_tokens", 0) or 0) if usage else 0
+    cost = round(
+        (in_tok  / 1_000_000) * REALTIME_INPUT_PER_MTOK
+        + (out_tok / 1_000_000) * REALTIME_OUTPUT_PER_MTOK,
+        6,
+    )
+    row = {
+        "run_at": datetime.now(timezone.utc).isoformat(),
+        "operation": "cv_extract",
+        "model": MODEL,
+        "input_tokens": in_tok,
+        "cached_input_tokens": 0,
+        "output_tokens": out_tok,
+        "cost_usd": cost,
+        "notes": notes[:500],
+    }
+    try:
+        supabase_client.table("spend_tracking").insert(row).execute()
+    except Exception as e:
+        print(f"  [cv_extract] spend_tracking insert failed: {e}", file=sys.stderr)
+
+
+def extract_skill_graph(anthropic_client, resume_text: str, supabase_client=None) -> dict | None:
     """Run the extraction. Returns sanitized graph dict or None on failure.
 
     Fail-soft: any error returns None and the caller falls back to the
     parsed_text path. The cost is small and a retry on the next batch is
     cheap, so we don't bother retrying inline.
+
+    Audit H2: ``supabase_client`` is OPTIONAL but strongly recommended.
+    When provided, a row is written to ``spend_tracking`` with
+    operation='cv_extract' so the MTD sum used by ``budget.assert_under_budget``
+    accounts for this call. Without it, the AI cost is silently invisible
+    to /settings's SpendChart and the kill-switch. The arg defaults to
+    None for backward compatibility with the few callers that don't yet
+    pass it; those callers should be updated.
     """
     if anthropic_client is None or not resume_text:
         return None
@@ -186,6 +239,10 @@ def extract_skill_graph(anthropic_client, resume_text: str) -> dict | None:
     except Exception as e:
         print(f"  [cv_extract] AI call failed: {e}", file=sys.stderr)
         return None
+
+    # Log spend BEFORE we parse — even if parsing fails the API call cost
+    # is real and must show up in MTD totals.
+    _log_spend(supabase_client, msg, notes=f"cv_chars={len(snippet)}")
 
     text = ""
     for block in getattr(msg, "content", []) or []:
@@ -249,9 +306,11 @@ def extract_and_store_skill_graph(
     """End-to-end: extract, sanitize, persist. Returns the graph or None.
 
     Called by cv_score.py at the top of a batch if the active resume's
-    skill_graph column is null.
+    skill_graph column is null. Audit H2: passes ``supabase_client``
+    through to ``extract_skill_graph`` so the API cost is logged to
+    ``spend_tracking``.
     """
-    graph = extract_skill_graph(anthropic_client, resume_text)
+    graph = extract_skill_graph(anthropic_client, resume_text, supabase_client)
     if graph is None:
         return None
     store_skill_graph(supabase_client, resume_id, graph)
@@ -298,7 +357,8 @@ def main() -> int:
     if anthropic is None:
         return 2
 
-    graph = extract_skill_graph(anthropic, resume_text)
+    # Pass sb so the manual invocation also writes to spend_tracking.
+    graph = extract_skill_graph(anthropic, resume_text, sb)
     if graph is None:
         print("  [fatal] extraction returned None", file=sys.stderr)
         return 4

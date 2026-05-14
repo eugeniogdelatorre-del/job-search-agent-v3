@@ -66,13 +66,21 @@ def _month_start_iso() -> str:
 # PostgREST's default max-rows ceiling (commonly 1000) silently truncates
 # a single unbounded `.select().execute()`. If we ever stop summing the
 # tail, the budget kill switch fails *open* and a runaway can blow past
-# the $10 ceiling. We paginate through `range()` until either the count
+# the $20 ceiling. We paginate through `range()` until either the count
 # matches what we've drained or the page returns short, and fail *closed*
 # (return +inf so `assert_under_budget` trips) if anything looks off.
 _SPEND_PAGE_SIZE = 1000
 # 50 × 1000 = 50k rows in a single UTC month. At projected ~$0.22/mo with
 # a handful of pipeline runs per day, real volume is in the dozens. Hitting
 # this cap means something is broken — fail closed.
+#
+# Audit M5 (2026-05-14): one row per BATCH (not per job). classify and
+# cv_score insert a single spend_tracking row per Anthropic batch, so
+# 50k rows ≈ 50k batches. At the current cadence (~10 batches/day max,
+# pipeline runs ~once daily plus manual dispatches) that's > 13 years
+# of normal operation — comfortable. The cap only matters if a future
+# change starts logging per-job rows, in which case raise it explicitly
+# (don't quietly lift the page count and hope).
 _SPEND_MAX_PAGES = 50
 
 
