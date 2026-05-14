@@ -238,27 +238,90 @@ export function SpendChart({
             className="w-full"
             style={{ height: 100, display: 'block' }}
           >
-            {stackedBars.map(bar => (
-              <g key={bar.day}>
-                {bar.segs.map((s, idx) => (
+            {stackedBars.map((bar, barIdx) => {
+              const dayTotal = dayTotals[barIdx] ?? 0
+              // 2026-05-14: per-bar hover tooltip via native SVG <title>.
+              // Hover any bar to see "YYYY-MM-DD — $X.XX (classify $a /
+              // geo_filter $b / cv_score $c)". Pure server-rendered, no
+              // client JS, no chart library.
+              const dmap = byDayOp.get(bar.day)
+              const breakdown = dmap
+                ? Array.from(dmap.entries())
+                    .filter(([, v]) => v > 0)
+                    .map(([op, v]) => `${op} ${formatUsd(v)}`)
+                    .join(' · ')
+                : ''
+              const tooltip = breakdown
+                ? `${bar.day} — ${formatUsd(dayTotal)} (${breakdown})`
+                : `${bar.day} — no spend`
+              return (
+                <g key={bar.day}>
+                  <title>{tooltip}</title>
+                  {/* Invisible full-height hit area so the tooltip fires
+                      anywhere over the bar's column, not just the
+                      coloured stack itself. */}
                   <rect
-                    key={`${bar.day}-${s.op}-${idx}`}
                     x={bar.x}
-                    y={s.y}
+                    y={0}
                     width={barW}
-                    height={Math.max(0.5, s.h)}
-                    fill={s.color}
-                    opacity={0.85}
+                    height={H}
+                    fill="transparent"
                   />
-                ))}
-              </g>
-            ))}
+                  {bar.segs.map((s, idx) => (
+                    <rect
+                      key={`${bar.day}-${s.op}-${idx}`}
+                      x={bar.x}
+                      y={s.y}
+                      width={barW}
+                      height={Math.max(0.5, s.h)}
+                      fill={s.color}
+                      opacity={0.85}
+                    />
+                  ))}
+                </g>
+              )
+            })}
           </svg>
           <div className="flex justify-between font-mono text-[10px] mt-1" style={{ color: '#3A4460' }}>
             <span>{filled[0]}</span>
             <span>max/day: {formatUsd(maxDayTotal)}</span>
             <span>{filled[filled.length - 1]}</span>
           </div>
+
+          {/* Recent-days strip — at-a-glance daily totals for the last 7 UTC
+              days, newest on the right. Bars give shape; this gives numbers
+              without forcing a tooltip hover. */}
+          <div className="mt-3 flex justify-end gap-2 overflow-x-auto pb-1">
+            {filled.slice(-7).map((day, i, arr) => {
+              const dmap = byDayOp.get(day)
+              const total = dmap
+                ? Array.from(dmap.values()).reduce((a, b) => a + b, 0)
+                : 0
+              const isToday = i === arr.length - 1
+              return (
+                <div
+                  key={day}
+                  className="rounded-[4px] px-2 py-1 min-w-[64px] text-right"
+                  style={{
+                    background: isToday ? '#101524' : '#0A0C12',
+                    border: '1px solid #1E2330',
+                  }}
+                  title={`${day} — total ${formatUsd(total)}`}
+                >
+                  <div className="font-mono text-[9px] uppercase tracking-wider" style={{ color: isToday ? '#00D4FF' : '#3A4460' }}>
+                    {isToday ? 'today' : day.slice(5)}
+                  </div>
+                  <div
+                    className="font-mono text-[11px] font-semibold tabular-nums"
+                    style={{ color: total > 0 ? '#E8ECF0' : '#3A4460' }}
+                  >
+                    {total > 0 ? formatUsd(total) : '—'}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
           {/* Legend */}
           <div className="flex gap-3 mt-2">
             {opEntries.map(([op]) => (
