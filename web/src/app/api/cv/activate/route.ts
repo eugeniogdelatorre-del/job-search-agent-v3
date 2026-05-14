@@ -33,8 +33,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'resume_id required' }, { status: 400 })
   }
 
+  // 2026-05-14 (Audit C3): the RPC derives user_id from auth.uid()
+  // server-side; we no longer pass it as an arg. The migration
+  // web/sql/008_rpc_auth_hardening.sql dropped the old (uuid, uuid)
+  // signature.
   const { error } = await supabase.rpc('set_active_resume', {
-    p_user_id: user.id,
     p_resume_id: resumeId,
   })
   if (error) {

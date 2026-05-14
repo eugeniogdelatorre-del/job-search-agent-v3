@@ -181,7 +181,18 @@ def _scrape_source(
 
 
 def _job_to_row(job: dict, score: int, breakdown: dict) -> dict:
-    """Transform an enriched raw job into a Supabase `jobs` row payload."""
+    """Transform an enriched raw job into a Supabase `jobs` row payload.
+
+    2026-05-14 (Audit H3): we deliberately do NOT set ``is_active`` here.
+    The first INSERT picks it up from the column default (``true``); on
+    UPDATE via upsert(on_conflict=dedup_key), keeping the key out of the
+    payload lets Postgres preserve whatever ``geo_filter.py`` or
+    ``retention.py`` previously set. Otherwise a rescrape that finds a
+    previously-rejected job would silently flip ``is_active`` back to
+    true while ``geo_filtered=true`` + ``geo_reject_reason`` stay
+    populated — yielding a hybrid row that re-appears on /today with the
+    rejection metadata still attached.
+    """
     return {
         "dedup_key": job["dedup_key"],
         "title": (job.get("title") or "").strip()[:500],
@@ -198,7 +209,7 @@ def _job_to_row(job: dict, score: int, breakdown: dict) -> dict:
         "score_total": score,
         "score_breakdown": breakdown,
         "last_seen_at": job["last_seen_at"],
-        "is_active": True,
+        # Intentionally omit ``is_active`` — see docstring above.
     }
 
 

@@ -3,8 +3,16 @@
 import { createClient, getCurrentUser } from '@/lib/supabase/server'
 import { SpendChart } from '@/components/SpendChart'
 import { SourceHealthTable } from '@/components/SourceHealthTable'
+import { MONTHLY_CAP_USD } from '@/lib/budget-config'
 
 export const dynamic = 'force-dynamic'
+
+// 2026-05-14 (Audit H7): same pagination ceiling used for the spend
+// fetch as for the active-jobs fetch. Spend volume is far lower (~1
+// row per batch, dozens per month) so this only kicks in after a
+// remediation run that logs a lot of per-job rows.
+const SPEND_PAGE = 1000
+const SPEND_MAX_PAGES = 50
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -14,22 +22,58 @@ export default async function SettingsPage() {
   const monthStart  = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
   const todayStart  = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
 
-  // Two parallel queries that don't depend on pagination:
-  //   - spend_tracking for the MTD chart + total
-  //   - sources_health for run-level fields (status / latency / last_run / error)
-  const [spendRes, healthRes] = await Promise.all([
-    supabase
+  // sources_health doesn't need pagination — capped at 1000 by the
+  // .limit() below and we genuinely don't care about runs older than
+  // the most recent ~1000 across 14 days.
+  const healthRes = await supabase
+    .from('sources_health')
+    .select('source, run_at, jobs_found, success, error_message, duration_ms')
+    .gte('run_at', new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString())
+    .order('run_at', { ascending: false })
+    .limit(1000)
+
+  // Paginated spend fetch — see comment at SPEND_PAGE definition.
+  // Row type is inferred from Supabase's PostgREST response (which uses
+  // nullable columns). The SpendChart prop type expects non-null fields;
+  // we filter to those shape-conformant rows before rendering.
+  const spendRowsRaw: Array<{
+    run_at: string
+    operation: string | null
+    model: string | null
+    cost_usd: number | null
+    input_tokens: number | null
+    cached_input_tokens: number | null
+    output_tokens: number | null
+  }> = []
+  let spendErr: { message: string } | null = null
+  for (let i = 0; i < SPEND_MAX_PAGES; i += 1) {
+    const from = i * SPEND_PAGE
+    const to   = from + SPEND_PAGE - 1
+    const res  = await supabase
       .from('spend_tracking')
       .select('run_at, operation, model, cost_usd, input_tokens, cached_input_tokens, output_tokens')
       .gte('run_at', monthStart.toISOString())
-      .order('run_at', { ascending: true }),
-    supabase
-      .from('sources_health')
-      .select('source, run_at, jobs_found, success, error_message, duration_ms')
-      .gte('run_at', new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString())
-      .order('run_at', { ascending: false })
-      .limit(1000),
-  ])
+      .order('run_at', { ascending: true })
+      .range(from, to)
+    if (res.error) { spendErr = res.error; break }
+    const batch = res.data ?? []
+    spendRowsRaw.push(...batch)
+    if (batch.length < SPEND_PAGE) break
+  }
+  // Coerce to the SpendChart row shape: drop rows missing operation
+  // (we can't classify them in the stacked bar without one) and treat
+  // null cost as 0. Same semantics the SpendChart code used implicitly
+  // before, made explicit here.
+  const spendRows = spendRowsRaw
+    .filter((r): r is typeof r & { operation: string } => r.operation !== null)
+    .map((r) => ({
+      run_at: r.run_at,
+      operation: r.operation,
+      cost_usd: Number(r.cost_usd ?? 0),
+      input_tokens: r.input_tokens,
+      cached_input_tokens: r.cached_input_tokens,
+      output_tokens: r.output_tokens,
+    }))
 
   // 2026-05-13: PostgREST caps each request at 1000 rows (Supabase
   // server-side `db.max_rows` default), so the previous `.range(0, 10_000)`
@@ -68,8 +112,7 @@ export default async function SettingsPage() {
     }
   }
 
-  const spendRows = spendRes.data ?? []
-  const mtdUsd    = spendRows.reduce((acc, r) => acc + Number(r.cost_usd ?? 0), 0)
+  const mtdUsd = spendRows.reduce((acc, r) => acc + r.cost_usd, 0)
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-6">
@@ -85,14 +128,12 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      {spendRes.error ? (
+      {spendErr ? (
         <div className="rounded-lg p-4 font-mono text-sm" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.3)', color: '#F87171' }}>
-          Spend load failed: {spendRes.error.message}
+          Spend load failed: {spendErr.message}
         </div>
       ) : (
-        // capUsd must mirror BUDGET_CAP_USD in scraper/budget.py
-        // (raised $8 → $20 on 2026-05-14).
-        <SpendChart rows={spendRows} capUsd={20} mtdUsd={mtdUsd} />
+        <SpendChart rows={spendRows} capUsd={MONTHLY_CAP_USD} mtdUsd={mtdUsd} />
       )}
 
       {healthRes.error || jobsErr ? (

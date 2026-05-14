@@ -3,9 +3,20 @@
 
 import { NextResponse } from 'next/server'
 import { createClient, getCurrentUser } from '@/lib/supabase/server'
+import { MONTHLY_CAP_USD } from '@/lib/budget-config'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+// 2026-05-14 (Audit H7): paginate the spend_tracking fetch instead of
+// trusting a single .select() to return everything. PostgREST silently
+// caps each request at 1000 rows (server-side `db.max_rows`). At our
+// current ~1 row/batch volume we're fine, but after any remediation run
+// (rescore, dedup repair) that logs 100+ rows in a day, an unpaginated
+// fetch would under-count `mtd_usd` and miscolour the chart. Hard
+// ceiling at 50 pages = 50k rows = many months of normal operation.
+const PAGE = 1000
+const MAX_PAGES = 50
 
 export async function GET() {
   const supabase = await createClient()
@@ -22,28 +33,43 @@ export async function GET() {
   // today the response is fine, but mark the cache as `private` so a
   // shared cache (Vercel CDN, browser back-cache) can't leak it to a
   // future second user. Document the intent.
-  const { data, error } = await supabase
-    .from('spend_tracking')
-    .select('run_at, operation, model, cost_usd, input_tokens, cached_input_tokens, output_tokens')
-    .gte('run_at', monthStart.toISOString())
-    .order('run_at', { ascending: true })
-
-  if (error) {
-    // Audit M6: don't leak the PostgREST error message verbatim to
-    // clients — table names, constraint names, etc. show up in
-    // ``error.message``. Log server-side, return a generic 500.
-    console.error('[api/spend] supabase select failed:', error.message)
-    return NextResponse.json({ error: 'failed to load spend data' }, { status: 500 })
+  type SpendRow = {
+    run_at: string
+    operation: string | null
+    model: string | null
+    cost_usd: number | null
+    input_tokens: number | null
+    cached_input_tokens: number | null
+    output_tokens: number | null
   }
-  const rows = data ?? []
+  const rows: SpendRow[] = []
+  for (let i = 0; i < MAX_PAGES; i += 1) {
+    const from = i * PAGE
+    const to   = from + PAGE - 1
+    const { data, error } = await supabase
+      .from('spend_tracking')
+      .select('run_at, operation, model, cost_usd, input_tokens, cached_input_tokens, output_tokens')
+      .gte('run_at', monthStart.toISOString())
+      .order('run_at', { ascending: true })
+      .range(from, to)
+    if (error) {
+      // Audit M6: don't leak the PostgREST error message verbatim to
+      // clients — table names, constraint names, etc. show up in
+      // ``error.message``. Log server-side, return a generic 500.
+      console.error('[api/spend] supabase select failed:', error.message)
+      return NextResponse.json({ error: 'failed to load spend data' }, { status: 500 })
+    }
+    const batch = (data ?? []) as SpendRow[]
+    rows.push(...batch)
+    if (batch.length < PAGE) break  // last page
+  }
   const mtd_usd = rows.reduce((acc, r) => acc + Number(r.cost_usd ?? 0), 0)
 
   return NextResponse.json(
     {
       month_start: monthStart.toISOString(),
       mtd_usd,
-      // Mirrors BUDGET_CAP_USD in scraper/budget.py (raised $8→$20 on 2026-05-14).
-      cap_usd: 20,
+      cap_usd: MONTHLY_CAP_USD,
       rows,
     },
     {

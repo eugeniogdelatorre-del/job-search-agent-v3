@@ -168,37 +168,75 @@ def _step2_backfill_keys(client, rows: list[dict], deleted_ids: set[str], dry: b
     """Update every remaining row's dedup_key to the new 3-part format.
 
     Skips rows already in 3-part format (idempotent re-run) and rows we
-    deleted in Step 1. Also skips writes when the new key would collide
-    with an existing key (defensive — shouldn't happen after Step 1).
+    deleted in Step 1.
+
+    2026-05-14 (Audit C1): the previous version only de-duplicated the
+    NEW keys *within this run*. If two old-format rows that escaped
+    Step 1 (e.g. historical duplicates from BEFORE today, intentionally
+    skipped by Step 1's `today_dups` filter) would map to the same new
+    key, the second UPDATE hit a 23505 UNIQUE violation. The retry
+    swallowed the error and the second row kept its old 2-part key —
+    re-creating the original bug for those specific rows on the very
+    next scrape.
+
+    New approach: compute the new key for every candidate row up front,
+    group by the new key, and within each group keep ONLY the oldest
+    (lowest first_seen_at) for the rewrite. The rest are deleted as
+    duplicates so the unique constraint is never under threat.
     """
-    updated = 0
-    # Track keys we've assigned so far in this run to catch any in-loop
-    # collisions early instead of waiting for PostgREST to 409.
-    seen_new_keys: set[str] = set()
+    # Phase A: gather candidates that actually need rewriting.
+    # Skips deleted (step 1) and already-3-part rows for idempotency.
+    candidates: list[tuple[str, dict]] = []  # (new_key, row)
     for r in rows:
         if r["id"] in deleted_ids:
             continue
         current = r.get("dedup_key") or ""
-        # 3-part keys have exactly TWO pipes. Skip rows already in the new
-        # shape so the script is idempotent.
         if current.count("|") >= 2:
-            continue
+            continue  # already in new shape
         new_key = make_dedup_key(r.get("title"), r.get("company"), r.get("location"))
-        if new_key in seen_new_keys:
-            # Two rows would land on the same new key — shouldn't happen
-            # after Step 1 cleared today's duplicates. Skip to avoid the
-            # constraint violation; operator can inspect.
-            print(f"  [step2] in-run collision on key={new_key!r} (id={r['id']}); skipping", file=sys.stderr)
-            continue
-        seen_new_keys.add(new_key)
+        candidates.append((new_key, r))
+
+    # Phase B: group by the new key. Multiple old-format rows that map to
+    # the same new key are duplicates; we keep the oldest first_seen_at
+    # and delete the rest.
+    by_new_key: dict[str, list[dict]] = defaultdict(list)
+    for new_key, r in candidates:
+        by_new_key[new_key].append(r)
+
+    extra_deleted = 0
+    updated = 0
+    for new_key, group in by_new_key.items():
+        # Sort by first_seen_at asc so [0] is the row we keep.
+        group_sorted = sorted(group, key=lambda x: (x.get("first_seen_at") or ""))
+        canonical = group_sorted[0]
+        dups      = group_sorted[1:]
+        # Delete the losers first to clear the unique-key path for the
+        # canonical's rewrite.
+        for d in dups:
+            if dry:
+                extra_deleted += 1
+                continue
+            try:
+                client.table("jobs").delete().eq("id", d["id"]).execute()
+                extra_deleted += 1
+            except Exception as e:
+                print(f"  [step2] failed to delete historical dup id={d['id']}: {e}", file=sys.stderr)
+        # Now safe to rewrite the canonical.
         if dry:
             updated += 1
             continue
         try:
-            client.table("jobs").update({"dedup_key": new_key}).eq("id", r["id"]).execute()
+            client.table("jobs").update({"dedup_key": new_key}).eq("id", canonical["id"]).execute()
             updated += 1
         except Exception as e:
-            print(f"  [step2] failed to update id={r['id']}: {e}", file=sys.stderr)
+            # Defence-in-depth: if Phase B's grouping missed something
+            # (e.g. a row already carrying this exact new key that wasn't
+            # in our candidate list because it was already 3-part), log
+            # and keep going so one bad row doesn't block the rest.
+            print(f"  [step2] failed to update id={canonical['id']} → {new_key!r}: {e}", file=sys.stderr)
+    if extra_deleted > 0:
+        verb = "would delete" if dry else "deleted"
+        print(f"  [step2] {verb} {extra_deleted} extra historical dups uncovered during backfill")
     return updated
 
 
