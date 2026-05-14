@@ -42,7 +42,8 @@ export async function GET() {
     {
       month_start: monthStart.toISOString(),
       mtd_usd,
-      cap_usd: 8,
+      // Mirrors BUDGET_CAP_USD in scraper/budget.py (raised $8→$20 on 2026-05-14).
+      cap_usd: 20,
       rows,
     },
     {
