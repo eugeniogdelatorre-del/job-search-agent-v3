@@ -90,7 +90,9 @@ export default async function SettingsPage() {
           Spend load failed: {spendRes.error.message}
         </div>
       ) : (
-        <SpendChart rows={spendRows} capUsd={8} mtdUsd={mtdUsd} />
+        // capUsd must mirror BUDGET_CAP_USD in scraper/budget.py
+        // (raised $8 → $20 on 2026-05-14).
+        <SpendChart rows={spendRows} capUsd={20} mtdUsd={mtdUsd} />
       )}
 
       {healthRes.error || jobsErr ? (

@@ -3,9 +3,9 @@
 Reads month-to-date sum of `spend_tracking.cost_usd`. Raises BudgetExceeded
 if MTD has already hit the cap. This is the kill switch that stops a
 runaway loop (retry hell, infinite Batch resubmits, classifier in a loop,
-etc.) from draining the $10 ceiling.
+etc.) from draining the monthly ceiling.
 
-Per §D4: hard kill at $8 MTD. Alert email on trip (wired up in Phase 9).
+Per §D4 (revised 2026-05-14): hard kill at $20 MTD. Alert email on trip.
 
 Used by classify.py, cv_score.py, and weekly_summary.py — call
 `assert_under_budget(client)` at the top of main() before spending anything.
@@ -19,10 +19,16 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
-# §D4: hard kill at $8 MTD. Sits well under the $10 ceiling so we have
-# slack for the Resend alert email + any retries the scheduler fires
-# between the trip and us noticing.
-BUDGET_CAP_USD = 8.00
+# §D4: hard kill at $20 MTD (raised from $8 on 2026-05-14, see comment
+# block below). Comfortable safety belt against runaway loops while
+# tolerating one-off remediation costs.
+# 2026-05-14: bumped from $8 → $20 after the dedup-key collision bug
+# pushed MTD to $8.43 in a single day (1,829 duplicate rows hit classify
+# + geo_filter + cv_score for the same jobs already processed). At the
+# operator's projected ~$0.22/month steady-state, $20 is ~90× normal
+# usage — still well above anything natural, generous enough to absorb
+# one-off remediation runs (rescore, dedup repair) without tripping.
+BUDGET_CAP_USD = 20.00
 
 # Per-stage caps (sum = global cap above). When cv_score trips, classify
 # and geo_filter keep running so the dashboard stays current with new-job
@@ -31,14 +37,16 @@ BUDGET_CAP_USD = 8.00
 # per-job token cost and the broadest input set).
 #
 # At projected ~$0.22/month total, current usage sits at roughly
-#   classify   ~$0.04   ( 50× headroom on the $2 cap)
-#   geo_filter ~$0.03   ( 33× headroom on the $1 cap)
-#   cv_score   ~$0.15   ( 33× headroom on the $5 cap)
+#   classify   ~$0.04   (125× headroom on the $5 cap)
+#   geo_filter ~$0.03   (100× headroom on the $3 cap)
+#   cv_score   ~$0.15   ( 80× headroom on the $12 cap)
 # so a real trip means a clearly broken loop, not natural growth.
+# Scaled 2.5× from the original $2/$1/$5 split when the global cap moved
+# from $8 to $20 on 2026-05-14, then rounded to friendlier integers.
 STAGE_BUDGETS: dict[str, float] = {
-    "classify":   2.00,
-    "geo_filter": 1.00,
-    "cv_score":   5.00,
+    "classify":    5.00,
+    "geo_filter":  3.00,
+    "cv_score":   12.00,
 }
 
 ALERT_RECIPIENT = "eugeniogdelatorre@gmail.com"
