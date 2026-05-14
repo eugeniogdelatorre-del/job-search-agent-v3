@@ -151,9 +151,20 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ application: existing, duplicate: true })
         }
       }
-      console.error(
-        '[api/applications] 23505 but re-fetch empty after retries',
+      // Audit M6 (2026-05-14): after retries we KNOW the row exists
+      // (Postgres just told us with 23505) — we just can't see it on
+      // this read replica yet. Returning 500 makes the user think the
+      // save failed and click again; they'd then get a 200/duplicate
+      // and be confused. Return a soft success instead: the user-intent
+      // succeeded, the client just needs to refetch to see the row.
+      // The 202 status code signals "accepted but not yet visible".
+      console.warn(
+        '[api/applications] 23505 but re-fetch empty after retries — replication lag',
         { user_id: user.id, job_id: body.job_id },
+      )
+      return NextResponse.json(
+        { duplicate: true, application: null, message: 'saved (refresh to see)' },
+        { status: 202 },
       )
     }
     // Audit M6: don't leak PostgREST error internals to clients.

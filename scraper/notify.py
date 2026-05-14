@@ -80,21 +80,36 @@ def main() -> int:
         },
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            print(f"[notify] sent: HTTP {resp.status}")
-        return 0
-    except urllib.error.HTTPError as e:
-        body = ""
+    # Audit L2 (2026-05-14): retry transient failures. The previous
+    # version sent once and bailed; during a Resend brownout we'd lose
+    # the failure notification for the whole day. Two retries with 5s
+    # backoff catch the common case (a 503 from Cloudflare in front of
+    # api.resend.com) without blocking the workflow for long.
+    import time
+    MAX_ATTEMPTS = 3
+    BACKOFF_SECONDS = 5
+    last_err: str = ""
+    for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            body = e.read()[:300].decode("utf-8", errors="replace")
-        except Exception:
-            pass
-        print(f"::warning::[notify] HTTP {e.code}: {body!r}", file=sys.stderr)
-        return 0
-    except Exception as e:
-        print(f"::warning::[notify] failed: {e}", file=sys.stderr)
-        return 0
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                print(f"[notify] sent: HTTP {resp.status} (attempt {attempt})")
+            return 0
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read()[:300].decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            last_err = f"HTTP {e.code}: {body!r}"
+            # 4xx (other than 429) are not transient — don't retry.
+            if 400 <= e.code < 500 and e.code != 429:
+                break
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {e}"
+        if attempt < MAX_ATTEMPTS:
+            time.sleep(BACKOFF_SECONDS)
+    print(f"::warning::[notify] gave up after {MAX_ATTEMPTS} attempts: {last_err}", file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":

@@ -106,9 +106,25 @@ export async function GET(req: NextRequest) {
     console.error('[api/pipeline/status] meta fetch failed:', runMetaRes.status)
     return NextResponse.json({ error: 'GitHub API error', status: runMetaRes.status }, { status: 502 })
   }
-  const runMeta = (await runMetaRes.json()) as { path?: string }
+  const runMeta = (await runMetaRes.json()) as { path?: string; created_at?: string }
   if (runMeta.path !== '.github/workflows/pipeline.yml') {
     return NextResponse.json({ error: 'run does not belong to pipeline.yml' }, { status: 403 })
+  }
+
+  // Audit M9 (2026-05-14): reject very old runIds. The status endpoint
+  // is meant for polling an in-flight run dispatched ~minutes ago. An
+  // attacker who knows an old runId could repeatedly hit this route to
+  // exhaust the PAT's 5000-req/hr rate limit via the downstream
+  // /jobs call below. 1 hour is well past pipeline.yml's ~25-min
+  // wall-time so legitimate clients are never affected.
+  if (runMeta.created_at) {
+    const ageMs = Date.now() - Date.parse(runMeta.created_at)
+    if (Number.isFinite(ageMs) && ageMs > 60 * 60 * 1000) {
+      return NextResponse.json(
+        { error: 'run is older than 1 hour; status polling only supports recent runs' },
+        { status: 410 }
+      )
+    }
   }
 
   const res = await fetch(

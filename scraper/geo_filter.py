@@ -265,10 +265,35 @@ def _fetch_unfiltered_jobs(client, limit: int) -> list[dict]:
             .limit(limit)
             .execute()
         )
-        return getattr(resp, "data", []) or []
+        rows = getattr(resp, "data", []) or []
     except Exception as e:
         print(f"  [supabase] fetch unfiltered jobs failed: {e}", file=sys.stderr)
         return []
+
+    # Audit H5 (2026-05-14): warn when the queue is growing faster than
+    # we drain. After today's dedup incident pushed 1,800+ rows through
+    # geo_filter at once, the rest were silently deferred — no alert,
+    # operator only notices when /today has fewer cards than expected.
+    if len(rows) >= limit:
+        try:
+            total_resp = (
+                client.table("jobs")
+                .select("id", count="exact", head=True)
+                .eq("is_active", True)
+                .eq("geo_filtered", False)
+                .filter("remote_status", "not.is", "null")
+                .execute()
+            )
+            total = int(getattr(total_resp, "count", 0) or 0)
+            if total > int(limit * 1.5):
+                print(
+                    f"::warning::geo_filter backlog at {total} unfiltered jobs (run "
+                    f"capped at {limit}). Deferred to subsequent runs; consider "
+                    "raising the limit or dispatching geo_filter.yml manually."
+                )
+        except Exception as e:
+            print(f"  [geo_filter] backlog probe failed: {e}", file=sys.stderr)
+    return rows
 
 
 def _build_user_message(job: dict, candidate_city: str, candidate_country: str) -> str:
@@ -533,15 +558,35 @@ def main() -> int:
     # bug because every job slips through. Loudly flag when the parse-
     # fail ratio crosses a threshold so it surfaces in Actions logs and
     # the operator can investigate before the next batch burns budget.
-    PARSE_FAIL_RATIO_THRESHOLD = 0.05  # 5% — well above transient noise
+    # Audit M3 (2026-05-14): bumped to a two-tier check. WARN at 5%
+    # (transient model noise, fail-open is safe to silently absorb) but
+    # FAIL the run at 20% — at that ratio model output is genuinely
+    # degraded and continuing to fail-open would flood /today with
+    # non-LATAM jobs for the rest of the day. Workflow non-zero exit
+    # triggers notify_on_failure so the operator sees the email instead
+    # of having to notice missing cards.
+    PARSE_FAIL_RATIO_THRESHOLD = 0.05  # warn
+    PARSE_FAIL_RATIO_HARD_FAIL = 0.20  # exit 1
     total_results = len(pass_ids) + len(fail_records) + parse_failed + errored
+    hard_fail = False
     if total_results > 0:
         parse_fail_ratio = parse_failed / total_results
-        if parse_fail_ratio > PARSE_FAIL_RATIO_THRESHOLD:
+        if parse_fail_ratio > PARSE_FAIL_RATIO_HARD_FAIL:
+            print(
+                f"::error::geo_filter parse_failed ratio "
+                f"{parse_fail_ratio:.1%} ({parse_failed}/{total_results}) "
+                f"exceeds HARD-FAIL threshold {PARSE_FAIL_RATIO_HARD_FAIL:.1%}. "
+                f"Model output is degraded — failing the run so the operator "
+                f"investigates before the next batch burns budget. "
+                f"Inspect batch {batch_id}.",
+                file=sys.stderr,
+            )
+            hard_fail = True
+        elif parse_fail_ratio > PARSE_FAIL_RATIO_THRESHOLD:
             print(
                 f"::warning::geo_filter parse_failed ratio "
                 f"{parse_fail_ratio:.1%} ({parse_failed}/{total_results}) "
-                f"exceeds threshold {PARSE_FAIL_RATIO_THRESHOLD:.1%}. "
+                f"exceeds warn threshold {PARSE_FAIL_RATIO_THRESHOLD:.1%}. "
                 f"Model output may be drifting — inspect batch {batch_id} "
                 f"and consider re-running once the regression is fixed.",
                 file=sys.stderr,
@@ -563,7 +608,11 @@ def main() -> int:
         ),
     )
     print(f"  cost=${cost}  done: {datetime.now(timezone.utc).isoformat()}")
-    return 0
+    # Audit M3: hard-fail exit propagates through to the workflow so
+    # notify_on_failure fires. We still write back the rows that DID
+    # parse — those decisions are good; we just don't want to keep
+    # spending on a degraded model.
+    return 1 if hard_fail else 0
 
 
 if __name__ == "__main__":

@@ -131,10 +131,37 @@ def _fetch_unclassified_jobs(client, limit: int) -> list[dict]:
             .limit(limit)
             .execute()
         )
-        return getattr(resp, "data", []) or []
+        rows = getattr(resp, "data", []) or []
     except Exception as e:
         print(f"  [supabase] fetch unclassified failed: {e}", file=sys.stderr)
         return []
+
+    # Audit H5 (2026-05-14): if we drained exactly `limit` rows, the
+    # queue might be much longer — we just don't know how much longer
+    # without a count query. Probe the total once so the operator gets a
+    # ::warning:: when the backlog is growing faster than we drain.
+    if len(rows) >= limit:
+        try:
+            total_resp = (
+                client.table("jobs")
+                .select("id", count="exact", head=True)
+                .is_("function_category", "null")
+                .eq("is_active", True)
+                .gte("score_total", CLASSIFY_MIN_SCORE)
+                .execute()
+            )
+            total = int(getattr(total_resp, "count", 0) or 0)
+            if total > int(limit * 1.5):
+                print(
+                    f"::warning::classify backlog at {total} eligible jobs (run "
+                    f"capped at {limit}). Deferred to subsequent runs; consider "
+                    "raising MAX_JOBS_PER_RUN or running classify.yml manually."
+                )
+        except Exception as e:
+            # Fail-soft: missing the warning is harmless; can't let it
+            # block the real classify run.
+            print(f"  [classify] backlog probe failed: {e}", file=sys.stderr)
+    return rows
 
 
 def _build_user_message(job: dict) -> str:

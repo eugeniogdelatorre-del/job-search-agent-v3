@@ -76,10 +76,11 @@ export async function POST(req: NextRequest) {
   // ── Step 1: activate the chosen CV (if resume_id supplied) ───────────────
   // Audit H12: single atomic RPC instead of deactivate-then-activate.
   // Requires web/sql/001_resumes_set_active.sql to have been applied.
+  // 2026-05-14 (Audit C3): the RPC now derives user_id from auth.uid()
+  // server-side. See web/sql/008_rpc_auth_hardening.sql.
   let activated = false
   if (body.resume_id) {
     const { error: rpcErr } = await supabase.rpc('set_active_resume', {
-      p_user_id: user.id,
       p_resume_id: body.resume_id,
     })
     if (rpcErr) {

@@ -45,6 +45,20 @@ def normalize_for_dedup(s: str | None) -> str:
 #   * "Remote — Americas" and "Remote, US" map to "remote"
 #   * "Buenos Aires, AR" and "BA, Argentina" map to "ar"
 # while distinct buckets like "us" vs "remote" stay separate.
+#
+# Audit M4 (deferred — see below): "Remote, US" and "Remote, EU"
+# postings still collapse onto a single ``"remote"`` bucket. The right
+# fix is to encode the region into the bucket (e.g. ``"remote-us"``)
+# but DOING SO IS A SHAPE-DRIFT MIGRATION — the existing rows in the
+# DB carry the old bucket, and the next scrape with new logic would
+# produce non-matching keys, INSERT duplicates, and re-trigger the same
+# class of bug that fix_dedup_collisions.py just repaired today
+# (2026-05-14). Ship it as a coordinated rollout next time: write a
+# new fix_dedup_collisions-style backfill, run it on prod, then merge
+# the dedup.py code change in the same window. Until then, treat
+# "Remote, US" and "Remote, EU" same-(title, company) collisions as a
+# known limitation — the impact is low (the deduped one keeps the
+# higher source_tier, so we usually pick the better-sourced posting).
 _REMOTE_HINTS = ("remote", "anywhere", "worldwide", "global")
 
 
@@ -60,7 +74,8 @@ def location_bucket(location: str | None) -> str:
         return "any"
     if any(h in n for h in _REMOTE_HINTS):
         # All remote postings share one bucket — same-(title, company)
-        # remote duplicates DO collapse, which is what we want.
+        # remote duplicates DO collapse, which is what we want today.
+        # See Audit M4 deferral note above for the planned refinement.
         return "remote"
     # Strip punctuation/whitespace then take the leading 24 chars of
     # the normalized form. Enough to distinguish "San Francisco" from

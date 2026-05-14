@@ -360,6 +360,19 @@ def _fetch_eligible_jobs(client, already_scored: set[str], limit: int) -> list[d
         # than dropping a partial backlog scan on the floor.
         return eligible
 
+    # Audit M2 (2026-05-14): warn when HARD_CAP exits with a still-short
+    # eligible list. Previously the loop bailed silently — after a CV
+    # swap with 10k unscored eligible jobs (lowered WARM_THRESHOLD,
+    # rescore_recent.py clearing job_scores), the second half of the
+    # backlog never surfaced. ``::warning::`` lands as a yellow
+    # annotation on the workflow run in GitHub Actions.
+    if offset >= HARD_CAP and len(eligible) < limit:
+        print(
+            f"::warning::cv_score paged through HARD_CAP={HARD_CAP} rows but only "
+            f"found {len(eligible)} unscored eligible jobs (asked for {limit}). "
+            "Remaining backlog will be picked up on subsequent runs."
+        )
+
     return eligible[:limit]
 
 
@@ -476,6 +489,17 @@ def _resolve_cv_payload(resume: dict, supabase_client, anthropic_client) -> tupl
       3. Else fall back to parsed_text.
 
     Returns (mode, payload_string) where mode is "graph" or "text".
+
+    Audit H4 (2026-05-14): CV-swap-during-cv_score behaviour. The
+    ``resume`` dict was captured at the start of ``main()`` by
+    ``_fetch_active_resume``. If the user activates a different CV on
+    the web app while this run is in flight, the new resume's data is
+    NOT picked up — the current run finishes scoring against the
+    captured resume_id. This is intentional (avoid half-scoring a
+    batch against two CVs and writing inconsistent job_scores rows),
+    but worth knowing if you ever see "I activated CV B but cv_score
+    still wrote scores under CV A's id." The next pipeline tick will
+    pick up CV B cleanly.
     """
     import json as _json
     from scraper.cv_extract import extract_and_store_skill_graph
@@ -781,8 +805,17 @@ def main() -> int:
     resume_id = str(resume["id"])
     resume_text = (resume.get("parsed_text") or "").strip()
     if len(resume_text) < 100:
-        print("  active resume text too short — skipping", file=sys.stderr)
-        return 0
+        # Audit L5 (2026-05-14): return non-zero so the workflow fails
+        # and notify_on_failure fires. A short / unparseable resume is a
+        # config error, not a normal no-op — without this exit, cv_score
+        # would silently emit nothing for days and the operator would
+        # only notice via "the dashboard looks stale".
+        print(
+            "::error::active resume text too short (<100 chars) — "
+            "re-upload the CV or check parsing on /resume",
+            file=sys.stderr,
+        )
+        return 1
     print(f"  active resume={resume_id}  chars={len(resume_text)}")
 
     already = _fetch_already_scored_ids(sb, resume_id) if sb else set()
