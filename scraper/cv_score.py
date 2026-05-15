@@ -53,9 +53,24 @@ MODEL = "claude-haiku-4-5-20251001"
 # Base Haiku 4.5: $1 / $5 per MTok input/output. Batch API = 50% off.
 BATCH_INPUT_PER_MTOK = 0.50
 BATCH_OUTPUT_PER_MTOK = 2.50
-# Cache-write (ephemeral, 5-min TTL): 1.25x base input.
-# Cache-read: 0.1x base input. Batch discount composes with both.
-CACHE_WRITE_MULTIPLIER = 1.25
+# Cache-write multiplier depends on TTL:
+#   ephemeral (5-min) → 1.25× base input
+#   ephemeral (1-hour) → 2.0×  base input
+# Cache-read: 0.1× base input regardless of TTL. Batch discount composes
+# with both.
+#
+# 2026-05-14: switched to 1-hour TTL after observing 0% cache-read MTD
+# on /settings. Anthropic's Batch API parallelises requests across
+# workers and queues them over windows much longer than 5 min, so the
+# default 5-min TTL was producing per-job cache misses — every request
+# paid for the full ~5k-token system block. With 530 jobs in a single
+# day's backlog drain that was ~$2.04 instead of the ~$0.45 a healthy
+# cache would have cost. 1-hour TTL costs more per WRITE (1.25× → 2.0×)
+# but the read price stays flat, so net savings scale with batch size:
+#   530-job batch: $1.59 saved (4.5× cheaper)
+#    50-job batch (steady state): $0.03 saved (4.0× cheaper)
+# See _build_batch_requests for the cache_control marker.
+CACHE_WRITE_MULTIPLIER = 2.00  # was 1.25 (5-min TTL)
 CACHE_READ_MULTIPLIER = 0.10
 
 # Warm threshold — jobs below this rule-based score are skipped for AI scoring.
@@ -539,7 +554,14 @@ def _build_batch_requests(jobs: list[dict], cv_payload: tuple[str, str]) -> list
     system_block = {
         "type": "text",
         "text": prefix + content + SYSTEM_SUFFIX,
-        "cache_control": {"type": "ephemeral"},
+        # 2026-05-14: switched from default 5-min TTL to explicit 1-hour
+        # TTL after MTD cache-read rate was observed at 0% on /settings.
+        # Batch API parallelises requests over windows much longer than
+        # 5 min; the default TTL was expiring before subsequent requests
+        # could read it, so every job was paying for the full system
+        # block. 1-hour TTL costs 1.6× more per WRITE but reads stay
+        # flat, so any batch ≥ ~5 jobs is net cheaper.
+        "cache_control": {"type": "ephemeral", "ttl": "1h"},
     }
     out = []
     for job in jobs:
