@@ -289,22 +289,46 @@ def _fetch_active_resume(client) -> dict | None:
 
 def _fetch_already_scored_ids(client, resume_id: str) -> set[str]:
     """Job IDs already scored with v5 breakdown for this resume — skip them.
-    Jobs with score_breakdown_v5 IS NULL are re-eligible (old v4 rows)."""
+    Jobs with score_breakdown_v5 IS NULL are re-eligible (old v4 rows).
+
+    Paginates the fetch because PostgREST applies a hard server-side
+    `Range` cap (default 1000 rows) to every unbounded `.select()`. The
+    previous one-shot fetch silently truncated at 1000 — so when more
+    than 1000 jobs had already been scored against the active CV, the
+    leftover already-scored IDs were missing from the exclusion set and
+    `_fetch_eligible_jobs` happily handed those rows back to the batch
+    to be re-scored. Observed on 2026-05-16: 1418 scored jobs in DB,
+    only 1000 returned to the exclusion set, ~400 re-scored unnecessarily.
+    """
     if client is None:
         return set()
+    seen: set[str] = set()
+    PAGE = 1000
+    HARD_CAP = 100_000  # safety — never page beyond this many rows
+    offset = 0
     try:
-        resp = (
-            client.table("job_scores")
-            .select("job_id")
-            .eq("resume_id", resume_id)
-            .filter("score_breakdown_v5", "not.is", "null")
-            .execute()
-        )
-        rows = getattr(resp, "data", []) or []
-        return {str(r["job_id"]) for r in rows}
+        while offset < HARD_CAP:
+            resp = (
+                client.table("job_scores")
+                .select("job_id")
+                .eq("resume_id", resume_id)
+                .filter("score_breakdown_v5", "not.is", "null")
+                .range(offset, offset + PAGE - 1)  # inclusive both ends
+                .execute()
+            )
+            rows = getattr(resp, "data", []) or []
+            if not rows:
+                break
+            for r in rows:
+                seen.add(str(r["job_id"]))
+            if len(rows) < PAGE:
+                break  # last page
+            offset += PAGE
     except Exception as e:
         print(f"  [supabase] fetch scored ids failed: {e}", file=sys.stderr)
-        return set()
+        # Fail-soft: return what we already paged in. Better to over-skip
+        # than under-skip — the alternative is re-scoring duplicates.
+    return seen
 
 
 def _fetch_eligible_jobs(client, already_scored: set[str], limit: int) -> list[dict]:
@@ -580,8 +604,27 @@ def _build_batch_requests(jobs: list[dict], cv_payload: tuple[str, str]) -> list
 
 
 def _submit_batch(anthropic_client, requests: list[dict]):
+    """Submit a Batch with the 1-hour-TTL caching beta enabled.
+
+    The system block in `_build_batch_requests` carries `cache_control:
+    {"type": "ephemeral", "ttl": "1h"}` to extend the default 5-min cache
+    TTL to 1 hour — Batch API parallelises across workers over windows
+    much longer than 5 min, so the default TTL produced 0 cache hits.
+
+    BUT the `ttl: "1h"` field is silently ignored unless the request
+    carries the `anthropic-beta: extended-cache-ttl-2025-04-11` header.
+    Observed on 2026-05-16: a 1000-job batch reported
+    cache_creation_input_tokens=0 + cache_read_input_tokens=0 → entire
+    batch billed as fresh input ($1.95 vs an expected ~$0.45 with cache
+    actually working). Reading the SDK source / docs confirms the beta
+    flag is required for the extended-TTL feature, which is still in
+    beta as of mid-2026.
+    """
     try:
-        return anthropic_client.messages.batches.create(requests=requests)
+        return anthropic_client.messages.batches.create(
+            requests=requests,
+            extra_headers={"anthropic-beta": "extended-cache-ttl-2025-04-11"},
+        )
     except Exception as e:
         print(f"  [anthropic] batch create failed: {e}", file=sys.stderr)
         return None
