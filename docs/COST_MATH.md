@@ -1,6 +1,6 @@
 # COST_MATH
 
-Projected and actual spend. Cap: **$8/mo hard**, ceiling $10/mo.
+Projected and actual spend. Caps (raised 2026-05-16): **$30/mo hard global**, per-stage **classify $5 / geo_filter $5 / cv_score $20**.
 
 ## Projection (from plan §8, at ~100 active jobs)
 
@@ -13,10 +13,17 @@ Projected and actual spend. Cap: **$8/mo hard**, ceiling $10/mo.
 
 Linear scaling: at 5× volume (~500 active jobs), AI spend is ~$1.10/mo.
 
-## Why the cap is $8
+## Why the cap is $30 (and cv_score is gated at $20)
 
-Cap exists to catch a runaway loop (classifier retry hell, infinite
-Batch resubmits), not expected usage. $8 sits well under the $10
+Caps exist to catch runaway loops (classifier retry hell, infinite
+Batch resubmits, cache misconfig, dedup-key collisions) and to absorb
+one-off remediation runs without manual intervention. The split keeps
+cv_score from monopolizing the budget while still letting the other
+stages run if cv_score trips. $30 was reached iteratively as real
+incidents exposed too-tight ceilings: $8 → $20 (2026-05-14, dedup
+duplicate-scoring) → $30 (2026-05-16, cache TTL beta-header gap;
+classify and geo_filter also raised to $5 each for surprise-spike
+headroom). The $30 sits well under any harder ceiling so retries
 ceiling so the Resend alert email and any retries between trip and
 notification still fit in budget.
 

@@ -19,7 +19,7 @@ classifies new jobs, drops location-ineligible roles, and scores every
 prompt caching. A small Next.js 14 dashboard on Vercel renders the
 results, lets Eugenio track applications on a kanban, and export
 filtered CSVs. A weekly email digest ships Sunday 19:00 ART. Hard
-budget cap: **$8/mo**. Projected run rate: **~$0.22/mo**.
+budget cap: **$30/mo** (with a $20 sub-cap on cv_score, $5 each on classify and geo_filter). Projected steady-state: **~$0.30/mo**.
 
 ## 2. Where things live
 
@@ -45,7 +45,7 @@ scraper/              Python 3.12 — runs only in GitHub Actions
   stale_apps.py         called from retention.py; Applied → Stale at 30d untouched
   _anthropic_batch.py   shared Anthropic SDK client + Batch poll + JSON parse
   score.py              rule-based scorer + hard-coded DEFAULT_CONFIG
-  budget.py             $8 cap + Resend alert on trip
+  budget.py             $30 global cap + per-stage caps ($5/$5/$20) + Resend alert on trip
   supabase_client.py    service-role client
   parsers/              one module per source type
   sources.json          source list (edit to add/remove)
@@ -209,7 +209,7 @@ Key design choices worth knowing:
    in `scraper/score.py` (gates / weights / thresholds), commit, push.
    Next scrape re-scores freshly-seen jobs. To re-score existing rows
    immediately: manual dispatch `scrape.yml`.
-5. **Spend watch**: `/settings` — MTD chart. Cap is $8. Expected spend
+5. **Spend watch**: `/settings` — MTD chart. Global cap $30, cv_score sub-cap $20, classify/geo_filter $5 each. Expected spend
    is pennies; anything > $1 means something's looping.
 
 ## 9. Common operations
@@ -237,8 +237,10 @@ At ~100 active jobs, ~300 new/mo, ~180 warm/mo:
 | Weekly summary | $0 |
 | **Total AI** | **~$0.22/mo** |
 
-Linear to 5× volume: ~$1.10/mo. Cap at $8 exists to catch runaway
-loops, not expected usage. $8 sits under the $10 ceiling so retries
+Linear to 5× volume: ~$1.50/mo. Cap at $30 (cv_score sub-cap $20,
+classify/geo_filter $5 each) exists to catch runaway loops and absorb
+one-off remediation runs, not expected usage. The headroom sits under
+any harder ceiling so retries
 between trip and alert email fit in budget.
 
 Knobs when/if costs climb (in order of effectiveness):
