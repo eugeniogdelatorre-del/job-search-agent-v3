@@ -9,9 +9,14 @@ name: weekly_summary
 # copies of the same roundup is harmless).
 
 on:
-  # Resumed 2026-05-07. Sundays 22:00 UTC = 19:00 ART.
-  schedule:
-    - cron: "0 22 * * 0"
+  # Paused 2026-05-17 alongside the scrape/AI chain — operator is out
+  # of Anthropic credit until end of May. weekly_summary does NOT use
+  # Anthropic credit (Resend only), but with no new scored jobs landing
+  # while the pipeline is paused, the digest would be stale/duplicated.
+  # Re-enabling alongside scrape.yml when credit returns.
+  # To resume: uncomment the two `schedule` / `cron` lines below.
+  #   schedule:
+  #     - cron: "0 22 * * 0"
   workflow_dispatch:
     inputs:
       # Audit M22: typed boolean — fixes the previous string `== "true"`

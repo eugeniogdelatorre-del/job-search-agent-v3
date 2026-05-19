@@ -11,8 +11,15 @@ name: scrape
 # workflow_dispatch keeps an optional 'group' input for debugging partial runs.
 
 on:
-  schedule:
-    - cron: "0 4 * * *"
+  # Daily schedule paused 2026-05-17 — operator is out of Anthropic
+  # credit until end of May. scrape is the head of the AI chain
+  # (classify → geo_filter → cv_score all fire via workflow_run on this
+  # workflow's success), so commenting out THIS cron pauses the whole
+  # pipeline without touching downstream files. workflow_dispatch stays
+  # active so manual runs are still possible if needed.
+  # To resume: uncomment the two `schedule` / `cron` lines below.
+  #   schedule:
+  #     - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
       # Audit M22: typed inputs fail at submit time instead of deep
