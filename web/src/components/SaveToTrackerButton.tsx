@@ -5,6 +5,7 @@
 // is saved. Clicking again calls DELETE to unsave.
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
 type Props = {
@@ -22,6 +23,7 @@ export function SaveToTrackerButton({
 }: Props) {
   const [appId, setAppId] = useState<string | null>(savedApplicationId ?? null)
   const [busy,  setBusy]  = useState(false)
+  const router = useRouter()
 
   // Audit M12: ``useState`` is initial-only — a subsequent server render
   // that passes a different ``savedApplicationId`` (e.g. kanban deleted
@@ -56,11 +58,29 @@ export function SaveToTrackerButton({
           throw new Error(body.error ?? 'save failed')
         }
         const data = (await res.json()) as {
-          application: { id: string }
+          // Audit C4 (2026-05-19): /api/applications returns 202 with
+          // `application: null` when Postgres reports a unique-violation
+          // (race-loser duplicate save) but the row hasn't yet propagated
+          // to the read replica. The previous type declared `application`
+          // as non-nullable, so the next-line .id read threw and surfaced
+          // as a "Could not update tracker" error toast even though the
+          // save actually succeeded server-side.
+          application: { id: string } | null
           duplicate?: boolean
         }
-        setAppId(data.application.id)
-        toast.success(data.duplicate ? 'Already in tracker' : 'Saved to tracker')
+        if (data.application) {
+          setAppId(data.application.id)
+          toast.success(data.duplicate ? 'Already in tracker' : 'Saved to tracker')
+        } else {
+          // 202 replication-lag path: server confirmed the row exists,
+          // we just can't see it on this read replica yet. Trigger a
+          // router refresh so the parent server component re-renders
+          // with the real savedApplicationId; the useEffect below picks
+          // it up and sets `appId` once the prop arrives. Keep
+          // toast.success — the user-intent did succeed.
+          toast.success('Saved to tracker (refreshing…)')
+          router.refresh()
+        }
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not update tracker')
