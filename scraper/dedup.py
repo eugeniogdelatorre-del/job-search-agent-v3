@@ -123,10 +123,32 @@ def _is_valid_key(key: str | None) -> bool:
     return True
 
 
-def dedup_within_run(jobs: list[dict]) -> list[dict]:
-    """Collapse same-dedup_key jobs within a run, keeping highest source_tier.
+def _richness(job: dict) -> tuple[int, int, int]:
+    """Tiebreaker tuple — higher is better.
 
-    Ties on source_tier keep the first seen (stable).
+    Primary:   source_tier (direct-company > web3 aggregator > broad board)
+    Secondary: has a listed salary (proxy for "parser extracted structured data")
+    Tertiary:  description length (longer = more signal for cv_score)
+
+    Audit H2 (2026-05-20): the previous code used a strict ``>`` on
+    source_tier, so the FIRST row seen on a tier tie always won, even if
+    a later row had a 5000-char description and a listed salary while the
+    first had neither. Using a tuple comparison ensures the richest row
+    survives dedup regardless of insertion order.
+    """
+    has_salary = 1 if (job.get("salary_min_usd") or job.get("salary_max_usd")) else 0
+    desc_len = len(job.get("description") or "")
+    tier = int(job.get("source_tier") or 0)
+    return (tier, has_salary, desc_len)
+
+
+def dedup_within_run(jobs: list[dict]) -> list[dict]:
+    """Collapse same-dedup_key jobs within a run, keeping the richest row.
+
+    "Richest" is defined by ``_richness``: highest source_tier first,
+    then listed salary, then longest description. On a full tie the first
+    seen wins (stable).
+
     Rows with an invalid dedup_key (empty / ``"|"``) pass through
     untouched — they shouldn't share a bucket with each other or with
     well-formed rows.
@@ -139,9 +161,6 @@ def dedup_within_run(jobs: list[dict]) -> list[dict]:
             passthrough.append(job)
             continue
         current = best.get(key)
-        if current is None:
-            best[key] = job
-            continue
-        if (job.get("source_tier") or 0) > (current.get("source_tier") or 0):
+        if current is None or _richness(job) > _richness(current):
             best[key] = job
     return list(best.values()) + passthrough
