@@ -234,7 +234,11 @@ def _resolve_candidate_location(anthropic_client, resume_text: str) -> str:
     rx = _regex_extract_candidate_location(resume_text)
     if rx:
         return rx
-    return "Buenos Aires, Argentina"
+    # Audit M7 (2026-05-20): read fallback from env var so other users
+    # (non-Argentina) don't need to modify the code. Defaults to the
+    # original hardcoded value so existing single-tenant setups are
+    # unaffected when GEO_FALLBACK_LOCATION is not set.
+    return (os.environ.get("GEO_FALLBACK_LOCATION") or "Buenos Aires, Argentina").strip()
 
 
 def _split_city_country(location: str) -> tuple[str, str]:

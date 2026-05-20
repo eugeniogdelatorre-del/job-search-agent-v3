@@ -25,11 +25,23 @@ import urllib.error
 import urllib.request
 
 
-ALERT_RECIPIENT = "eugeniogdelatorre@gmail.com"
+# Audit M5 (2026-05-20): read recipients from env var so all pipeline
+# users receive failure emails, not just Eugenio.  Comma-separated list;
+# falls back to the hardcoded address so deployments without the secret
+# are unaffected.
+_recipients_raw = os.environ.get("NOTIFY_RECIPIENTS", "").strip()
+ALERT_RECIPIENTS: list[str] = (
+    [r.strip() for r in _recipients_raw.split(",") if r.strip()]
+    if _recipients_raw
+    else ["eugeniogdelatorre@gmail.com"]
+)
+# Keep the singular alias for backward compatibility with any external callers.
+ALERT_RECIPIENT = ALERT_RECIPIENTS[0]
+
 ALERT_FROM = os.environ.get("RESEND_FROM") or "Job Agent <onboarding@resend.dev>"
 
 
-def _build_payload(name: str, url: str, detail: str) -> bytes:
+def _build_payload(name: str, url: str, detail: str, recipients: list[str] | None = None) -> bytes:
     detail_html = f"<p>{detail}</p>" if detail else ""
     html = (
         '<div style="font-family:system-ui,sans-serif;padding:20px;max-width:560px">'
@@ -45,7 +57,7 @@ def _build_payload(name: str, url: str, detail: str) -> bytes:
     )
     payload = {
         "from": ALERT_FROM,
-        "to": [ALERT_RECIPIENT],
+        "to": recipients if recipients is not None else ALERT_RECIPIENTS,
         "subject": f"[job-agent] {name} FAILED",
         "html": html,
     }
