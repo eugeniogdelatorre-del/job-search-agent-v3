@@ -173,7 +173,64 @@ def month_to_date_spend(client, operation: str | None = None) -> float:
         return float("inf")
 
 
-def _send_cap_alert(spent: float, cap_usd: float, operation: str | None, *, scope: str) -> None:
+def _alert_already_sent(client, *, scope: str, operation: str | None) -> bool:
+    """Return True if an alert for this (month, scope, operation) was already sent.
+
+    Queries ``spend_alerts`` for an existing row. Fail-OPEN on any error —
+    a DB hiccup must not suppress the FIRST trip email. Returns False when
+    client is None (dry run).
+
+    Audit H1 (2026-05-20): prevents the same cap-trip alert from being
+    sent on every subsequent run for the rest of the month.
+    """
+    if client is None:
+        return False
+    op = operation or "global"
+    try:
+        resp = (
+            client.table("spend_alerts")
+            .select("id")
+            .eq("month_start", _month_start_iso())
+            .eq("scope", scope)
+            .eq("operation", op)
+            .limit(1)
+            .execute()
+        )
+        return bool(getattr(resp, "data", None))
+    except Exception:
+        # Fail-OPEN: duplicate emails are annoying, missed FIRST alerts
+        # are operationally worse.
+        return False
+
+
+def _mark_alert_sent(client, *, scope: str, operation: str | None) -> None:
+    """Insert a row into spend_alerts to record that the trip email was sent.
+
+    Fail-soft: a Supabase error here must not prevent BudgetExceeded from
+    propagating or the email from being treated as sent.
+    """
+    if client is None:
+        return
+    op = operation or "global"
+    try:
+        client.table("spend_alerts").insert({
+            "month_start": _month_start_iso(),
+            "scope": scope,
+            "operation": op,
+            "alerted_at": datetime.now(timezone.utc).isoformat(),
+        }).execute()
+    except Exception as e:
+        print(f"  [budget] spend_alerts insert failed (non-fatal): {e}", file=sys.stderr)
+
+
+def _send_cap_alert(
+    spent: float,
+    cap_usd: float,
+    operation: str | None,
+    *,
+    scope: str,
+    client=None,
+) -> None:
     """Best-effort Resend email when the cap trips.
 
     ``scope`` is either ``"stage"`` (only the named stage paused — others
@@ -236,9 +293,11 @@ def _send_cap_alert(spent: float, cap_usd: float, operation: str | None, *, scop
         },
         method="POST",
     )
+    sent = False
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             print(f"  [budget] alert email sent: {resp.status}")
+            sent = True
     except urllib.error.HTTPError as e:
         print(
             f"  [budget] alert email HTTP {e.code}: {e.read()[:300]!r}",
@@ -246,6 +305,9 @@ def _send_cap_alert(spent: float, cap_usd: float, operation: str | None, *, scop
         )
     except Exception as e:
         print(f"  [budget] alert email failed: {e}", file=sys.stderr)
+
+    if sent:
+        _mark_alert_sent(client, scope=scope, operation=operation)
 
 
 def assert_under_budget(
@@ -277,7 +339,16 @@ def assert_under_budget(
             f"stage_cap=${stage_cap:.2f}"
         )
         if stage_spent >= stage_cap:
-            _send_cap_alert(stage_spent, stage_cap, operation, scope="stage")
+            # Audit H1: de-dup before sending so the same trip doesn't
+            # spam every run for the rest of the month.
+            if not _alert_already_sent(client, scope="stage", operation=operation):
+                _send_cap_alert(stage_spent, stage_cap, operation, scope="stage", client=client)
+            else:
+                print(
+                    f"  [budget] stage alert already sent this month for "
+                    f"op={operation} — suppressing duplicate",
+                    file=sys.stderr,
+                )
             raise BudgetExceeded(
                 f"Stage '{operation}' MTD spend ${stage_spent:.4f} >= "
                 f"stage cap ${stage_cap:.2f} — refusing to run (other stages "
@@ -288,7 +359,14 @@ def assert_under_budget(
     spent = month_to_date_spend(client)
     print(f"  [budget] global MTD spend=${spent:.4f}  global_cap=${cap_usd:.2f}")
     if spent >= cap_usd:
-        _send_cap_alert(spent, cap_usd, operation, scope="global")
+        # Audit H1: de-dup before sending.
+        if not _alert_already_sent(client, scope="global", operation=operation):
+            _send_cap_alert(spent, cap_usd, operation, scope="global", client=client)
+        else:
+            print(
+                "  [budget] global alert already sent this month — suppressing duplicate",
+                file=sys.stderr,
+            )
         raise BudgetExceeded(
             f"Global MTD spend ${spent:.4f} >= cap ${cap_usd:.2f} — refusing to run"
         )
