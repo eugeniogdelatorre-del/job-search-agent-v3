@@ -1,4 +1,4 @@
-"""Retention policy: 7-day inactive marker + 60-day hard delete +
+"""Retention policy: 30-day inactive marker + 60-day hard delete +
 auto-stale of Applied Kanban cards untouched for 30 days.
 
 Runs at the tail of every scrape. Idempotent — safe to run from both matrix

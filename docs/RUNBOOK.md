@@ -106,7 +106,7 @@ Recovery:
 ## Retention sweep
 
 Runs inside each scrape cycle via `scraper/retention.py`:
-- `is_active = false` for jobs with `last_seen_at` > 7 days ago
+- `is_active = false` for jobs with `last_seen_at` > 30 days ago
 - hard delete for jobs with `first_seen_at` > 60 days ago
 
 Applications (kanban) carry snapshot fields — they survive the delete

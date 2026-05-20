@@ -75,7 +75,7 @@ def _month_start_iso() -> str:
 # PostgREST's default max-rows ceiling (commonly 1000) silently truncates
 # a single unbounded `.select().execute()`. If we ever stop summing the
 # tail, the budget kill switch fails *open* and a runaway can blow past
-# the $20 ceiling. We paginate through `range()` until either the count
+# the $30 ceiling. We paginate through `range()` until either the count
 # matches what we've drained or the page returns short, and fail *closed*
 # (return +inf so `assert_under_budget` trips) if anything looks off.
 _SPEND_PAGE_SIZE = 1000

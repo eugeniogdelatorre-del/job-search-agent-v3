@@ -73,6 +73,10 @@ def fetch_top_jobs(client, active_resume_id: str):
             )
             .eq("resume_id", active_resume_id)
             .gte("scored_at", cutoff)
+            # Audit L5 (2026-05-20): .eq("jobs.*") embedded filters only work
+            # with !inner joins (used above). If the embed is ever changed to
+            # a left join, these filters would silently return all rows instead
+            # of filtering. Keep the !inner on the select above in sync.
             .eq("jobs.is_active", True)
             .is_("jobs.score_breakdown->>gate_failed", "null")
             .order("match_score", desc=True)
