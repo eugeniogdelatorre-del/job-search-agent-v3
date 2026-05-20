@@ -54,7 +54,13 @@ def _parse_compensation(comp) -> tuple[int | None, int | None, str | None]:
     for tier in tiers:
         if not isinstance(tier, dict):
             continue
-        if (tier.get("currencyCode") or tier.get("currency") or "").upper() not in ("USD", "", None):
+        # L4: strip + upper before the allow-check so the string "None"
+        # (which APIs sometimes return instead of Python None) doesn't
+        # escape the filter as "NONE".  The old set included Python None,
+        # which was dead code because the `or ""` fallback always yields a
+        # str; replaced with "NONE" to cover the string-sentinel case.
+        _currency = (tier.get("currencyCode") or tier.get("currency") or "").strip().upper()
+        if _currency not in ("USD", "", "NONE"):
             continue
         mn = tier.get("minValue") or tier.get("min")
         mx = tier.get("maxValue") or tier.get("max")

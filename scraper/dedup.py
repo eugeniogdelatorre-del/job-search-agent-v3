@@ -77,12 +77,16 @@ def location_bucket(location: str | None) -> str:
         # remote duplicates DO collapse, which is what we want today.
         # See Audit M4 deferral note above for the planned refinement.
         return "remote"
-    # Strip punctuation/whitespace then take the leading 24 chars of
-    # the normalized form. Enough to distinguish "San Francisco" from
-    # "New York" and "Buenos Aires" from "Mexico City" without being
-    # so specific that "San Francisco, CA" and "San Francisco, USA"
-    # diverge.
-    cleaned = _WHITESPACE.sub(" ", _NON_WORD.sub(" ", n)).strip()
+    # L7: strip state/country suffix before normalising so "City, ST"
+    # and "City" produce the same bucket. Split on the first comma and
+    # take only the city portion; everything after the comma is a
+    # regional qualifier ("CA", "USA", "Argentina") that shouldn't
+    # differentiate duplicates.
+    city_part = n.split(",", 1)[0].strip() if "," in n else n
+    # Strip remaining punctuation/whitespace then take the leading 24
+    # chars. Enough to distinguish "San Francisco" from "New York" and
+    # "Buenos Aires" from "Mexico City".
+    cleaned = _WHITESPACE.sub(" ", _NON_WORD.sub(" ", city_part)).strip()
     return cleaned[:24] or "any"
 
 
