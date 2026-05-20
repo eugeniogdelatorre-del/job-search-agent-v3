@@ -121,20 +121,35 @@ will not relocate.
 
 
 def _fetch_active_resume(client) -> dict | None:
-    """Return the active CV row, or None.
+    """Return the active CV row for PIPELINE_OWNER_USER_ID, or None.
 
     Audit H27: ``.maybe_single()`` raises if >1 row matches (e.g. two
     active resumes from a mid-migration state). The bare except below
     then logged a misleading "fetch active resume failed". Switching to
     ``.limit(1)`` returns the first match deterministically and lets the
     operator clean up the data later.
+
+    Audit C2 (2026-05-19): scope by ``user_id`` so the candidate-location
+    extraction always runs against the owner's CV, not whichever row
+    happened to have the lowest id across the (now multi-user) auth
+    allowlist. Returns None without issuing a query when the env var
+    is unset — see scraper.supabase_client.get_pipeline_owner_user_id.
     """
     if client is None:
+        return None
+    owner_id = supabase_client.get_pipeline_owner_user_id()
+    if not owner_id:
+        print(
+            "  [geo_filter] PIPELINE_OWNER_USER_ID unset — refusing to issue "
+            "a global resumes SELECT (audit C2)",
+            file=sys.stderr,
+        )
         return None
     try:
         resp = (
             client.table("resumes")
             .select("id,parsed_text")
+            .eq("user_id", owner_id)
             .eq("is_active", True)
             .order("id")
             .limit(1)
@@ -441,6 +456,19 @@ def main() -> int:
     sb = supabase_client.get_client()
     if sb is None and not args.dry:
         print("  [fatal] no Supabase client — set SUPABASE_URL + SUPABASE_SERVICE_KEY", file=sys.stderr)
+        return 2
+
+    # Audit C2 (2026-05-19): fail-closed if the single-tenant lock isn't
+    # set. _fetch_active_resume would refuse anyway, but a clear early
+    # error beats the downstream "no active resume" warning.
+    if not supabase_client.get_pipeline_owner_user_id():
+        print(
+            "  [fatal] PIPELINE_OWNER_USER_ID missing — refusing to run. "
+            "Set it to the Supabase auth.users.id of the pipeline owner "
+            "in GitHub repo Settings → Secrets and variables → Actions. "
+            "(See REVIEW.md C2.)",
+            file=sys.stderr,
+        )
         return 2
 
     try:

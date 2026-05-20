@@ -23,6 +23,29 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def get_pipeline_owner_user_id() -> str | None:
+    """The single user whose active resume the scraper services.
+
+    Audit C2 (2026-05-19): cv_score / geo_filter / weekly_summary all
+    used to do an unscoped ``.eq("is_active", True).limit(1)`` lookup,
+    which silently picked whichever ``resumes`` row had the lowest id
+    across all users. With the auth allowlist now widened past one
+    person, that meant the next user to activate a CV could quietly
+    redirect the daily AI spend onto their resume.
+
+    Set ``PIPELINE_OWNER_USER_ID`` in GitHub Actions secrets to the
+    Supabase ``auth.users.id`` of the owner. The pipeline refuses to
+    run if it's unset (fail-closed) rather than silently scoring
+    against an arbitrary user's CV.
+
+    Empty string is treated as unset — GitHub Actions sometimes
+    surfaces a missing secret as "" instead of unset, and we want both
+    paths to trip the refuse-to-run guard.
+    """
+    val = os.environ.get("PIPELINE_OWNER_USER_ID")
+    return val if val else None
+
+
 def get_client():
     """Return a Supabase client using the service-role key, or None if unavailable."""
     url = os.environ.get("SUPABASE_URL")

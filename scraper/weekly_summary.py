@@ -249,11 +249,29 @@ def main() -> int:
         print("  [summary] no supabase client — aborting", file=sys.stderr)
         return 1
 
-    # Find active resume
+    # Audit C2 (2026-05-19): scope the resume lookup by user_id so the
+    # weekly digest is always built from the owner's CV. Pre-fix this
+    # ran a global SELECT and could have picked any user's active row;
+    # combined with the hardcoded RECIPIENT below that meant the digest
+    # could be built against Federico/Ana's CV but still shipped to
+    # Eugenio. Fail-closed if the env var is unset.
+    owner_id = supabase_client.get_pipeline_owner_user_id()
+    if not owner_id:
+        print(
+            "  [fatal] PIPELINE_OWNER_USER_ID missing — refusing to run. "
+            "Set it to the Supabase auth.users.id of the pipeline owner "
+            "in GitHub repo Settings → Secrets and variables → Actions. "
+            "(See REVIEW.md C2.)",
+            file=sys.stderr,
+        )
+        return 2
+
+    # Find active resume (scoped to the owner)
     try:
         resp = (
             client.table("resumes")
             .select("id")
+            .eq("user_id", owner_id)
             .eq("is_active", True)
             .limit(1)
             .execute()

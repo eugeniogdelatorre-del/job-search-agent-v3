@@ -241,7 +241,7 @@ Rules:
 
 
 def _fetch_active_resume(client) -> dict | None:
-    """Return the active CV row, or None.
+    """Return the active CV row for PIPELINE_OWNER_USER_ID, or None.
 
     Audit H27: previously used ``.maybe_single()`` which RAISES if more
     than one row matches (e.g. mid-migration with two active resumes by
@@ -250,8 +250,23 @@ def _fetch_active_resume(client) -> dict | None:
     "you have multiple active resumes." Switch to ``.limit(1)`` so the
     function returns the first match deterministically even when the
     invariant is broken — operator can clean up at their leisure.
+
+    Audit C2 (2026-05-19): scope the lookup by ``user_id`` so the
+    pipeline only ever services the owner's CV. When
+    ``PIPELINE_OWNER_USER_ID`` is unset we return None WITHOUT issuing
+    a query — falling through to a global SELECT would re-introduce
+    the bug. main() does an explicit fail-closed env check at startup
+    so under normal operation this fallback is unreachable.
     """
     if client is None:
+        return None
+    owner_id = supabase_client.get_pipeline_owner_user_id()
+    if not owner_id:
+        print(
+            "  [cv_score] PIPELINE_OWNER_USER_ID unset — refusing to issue "
+            "a global resumes SELECT (audit C2)",
+            file=sys.stderr,
+        )
         return None
     # Select skill_graph too — cv_score prefers it over parsed_text when
     # present (see _resolve_cv_payload below). Gracefully degrades if the
@@ -261,6 +276,7 @@ def _fetch_active_resume(client) -> dict | None:
         resp = (
             client.table("resumes")
             .select(select_cols)
+            .eq("user_id", owner_id)
             .eq("is_active", True)
             .order("id")  # deterministic tiebreaker if multiple are active
             .limit(1)
@@ -276,6 +292,7 @@ def _fetch_active_resume(client) -> dict | None:
                 resp = (
                     client.table("resumes")
                     .select("id,parsed_text,char_count")
+                    .eq("user_id", owner_id)
                     .eq("is_active", True)
                     .order("id")
                     .limit(1)
@@ -851,6 +868,19 @@ def main() -> int:
     if not has_ai_key and not args.dry:
         print("  [fatal] ANTHROPIC_API_KEY missing — add it to GitHub repo "
               "Settings → Secrets and variables → Actions", file=sys.stderr)
+        return 2
+
+    # Audit C2 (2026-05-19): fail-closed if the single-tenant lock isn't
+    # set. Otherwise _fetch_active_resume would refuse anyway, but a
+    # clear early error beats "no active resume found" for diagnostics.
+    if not supabase_client.get_pipeline_owner_user_id():
+        print(
+            "  [fatal] PIPELINE_OWNER_USER_ID missing — refusing to run. "
+            "Set it to the Supabase auth.users.id of the pipeline owner "
+            "in GitHub repo Settings → Secrets and variables → Actions. "
+            "(See REVIEW.md C2.)",
+            file=sys.stderr,
+        )
         return 2
 
     sb = supabase_client.get_client()
