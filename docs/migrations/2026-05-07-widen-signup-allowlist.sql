@@ -4,6 +4,11 @@
 -- row's email against a fixed array literal. Adding more users later
 -- is a one-line edit to ARRAY[...] + re-run this migration.
 --
+-- Audit L2 (2026-05-20): the allowlist is ONLY documented here and in
+-- the comment at web/src/app/login/page.tsx:6-9. Keep both in sync when
+-- adding or removing users — grep for "block_unauthorized_signups" to
+-- find all references.
+--
 -- Applied 2026-05-07 against project nqevtnhryjnlbzmiojyb via the
 -- Supabase MCP tool (migration name: widen_signup_allowlist_to_three_emails).
 

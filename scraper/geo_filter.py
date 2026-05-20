@@ -121,20 +121,35 @@ will not relocate.
 
 
 def _fetch_active_resume(client) -> dict | None:
-    """Return the active CV row, or None.
+    """Return the active CV row for PIPELINE_OWNER_USER_ID, or None.
 
     Audit H27: ``.maybe_single()`` raises if >1 row matches (e.g. two
     active resumes from a mid-migration state). The bare except below
     then logged a misleading "fetch active resume failed". Switching to
     ``.limit(1)`` returns the first match deterministically and lets the
     operator clean up the data later.
+
+    Audit C2 (2026-05-19): scope by ``user_id`` so the candidate-location
+    extraction always runs against the owner's CV, not whichever row
+    happened to have the lowest id across the (now multi-user) auth
+    allowlist. Returns None without issuing a query when the env var
+    is unset — see scraper.supabase_client.get_pipeline_owner_user_id.
     """
     if client is None:
+        return None
+    owner_id = supabase_client.get_pipeline_owner_user_id()
+    if not owner_id:
+        print(
+            "  [geo_filter] PIPELINE_OWNER_USER_ID unset — refusing to issue "
+            "a global resumes SELECT (audit C2)",
+            file=sys.stderr,
+        )
         return None
     try:
         resp = (
             client.table("resumes")
             .select("id,parsed_text")
+            .eq("user_id", owner_id)
             .eq("is_active", True)
             .order("id")
             .limit(1)
@@ -219,7 +234,11 @@ def _resolve_candidate_location(anthropic_client, resume_text: str) -> str:
     rx = _regex_extract_candidate_location(resume_text)
     if rx:
         return rx
-    return "Buenos Aires, Argentina"
+    # Audit M7 (2026-05-20): read fallback from env var so other users
+    # (non-Argentina) don't need to modify the code. Defaults to the
+    # original hardcoded value so existing single-tenant setups are
+    # unaffected when GEO_FALLBACK_LOCATION is not set.
+    return (os.environ.get("GEO_FALLBACK_LOCATION") or "Buenos Aires, Argentina").strip()
 
 
 def _split_city_country(location: str) -> tuple[str, str]:
@@ -427,6 +446,80 @@ def _log_spend(client, *, input_tokens: int, output_tokens: int, cost_usd: float
         print(f"  [supabase] spend_tracking insert failed: {e}", file=sys.stderr)
 
 
+def _process_batch_results(
+    results,
+    job_ids: set,
+    pass_ids: list,
+    fail_records: list,
+) -> tuple[int, int, int, int]:
+    """Process a sequence of Anthropic batch result objects.
+
+    Returns (input_tokens, output_tokens, parse_failed, errored).
+
+    Audit H3 (2026-05-20): the previous inline loop accumulated token
+    counts ONLY for succeeded outcomes — errored results hit ``continue``
+    before the usage block. Anthropic bills input tokens on errored
+    requests too (the model received and processed the prompt). This
+    helper moves usage accumulation BEFORE any ``continue`` so errored
+    outcomes are properly counted.
+
+    Extracted as a standalone function so it can be unit-tested without
+    a real Anthropic client.
+    """
+    input_tokens = 0
+    output_tokens = 0
+    parse_failed = 0
+    errored = 0
+
+    for result in results:
+        custom_id   = getattr(result, "custom_id", None)
+        outcome     = getattr(result, "result",    None)
+        outcome_type = getattr(outcome, "type",    None)
+        message     = getattr(outcome, "message",  None)
+
+        # Audit H3: accumulate usage BEFORE any early continue so errored
+        # outcomes (which Anthropic still bills input tokens for) are counted.
+        if message is not None:
+            usage = getattr(message, "usage", None)
+            if usage:
+                input_tokens  += getattr(usage, "input_tokens",  0) or 0
+                output_tokens += getattr(usage, "output_tokens", 0) or 0
+
+        if outcome_type != "succeeded":
+            errored += 1
+            # Fail open: mark geo_filtered=true, keep is_active=true.
+            if custom_id and custom_id in job_ids:
+                pass_ids.append(custom_id)
+            continue
+
+        if not message:
+            errored += 1
+            # Same fail-open contract as the outer error branch.
+            if custom_id and custom_id in job_ids:
+                pass_ids.append(custom_id)
+            continue
+
+        text = ""
+        for block in getattr(message, "content", []) or []:
+            if getattr(block, "type", None) == "text":
+                text = getattr(block, "text", "") or ""
+                break
+        parsed = _extract_json(text)
+        if not parsed or custom_id not in job_ids:
+            parse_failed += 1
+            if custom_id and custom_id in job_ids:
+                pass_ids.append(custom_id)  # fail open on parse error
+            continue
+        eligible = parsed.get("eligible")
+        if eligible is False:
+            reason = str(parsed.get("reason") or "geo_filtered").strip()[:200]
+            fail_records.append((custom_id, reason))
+        else:
+            pass_ids.append(custom_id)
+
+    return input_tokens, output_tokens, parse_failed, errored
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="AI geo-filter: mark location-ineligible jobs inactive.")
     ap.add_argument("--limit", type=int, default=MAX_JOBS_PER_RUN)
@@ -441,6 +534,19 @@ def main() -> int:
     sb = supabase_client.get_client()
     if sb is None and not args.dry:
         print("  [fatal] no Supabase client — set SUPABASE_URL + SUPABASE_SERVICE_KEY", file=sys.stderr)
+        return 2
+
+    # Audit C2 (2026-05-19): fail-closed if the single-tenant lock isn't
+    # set. _fetch_active_resume would refuse anyway, but a clear early
+    # error beats the downstream "no active resume" warning.
+    if not supabase_client.get_pipeline_owner_user_id():
+        print(
+            "  [fatal] PIPELINE_OWNER_USER_ID missing — refusing to run. "
+            "Set it to the Supabase auth.users.id of the pipeline owner "
+            "in GitHub repo Settings → Secrets and variables → Actions. "
+            "(See REVIEW.md C2.)",
+            file=sys.stderr,
+        )
         return 2
 
     try:
@@ -508,42 +614,13 @@ def main() -> int:
     job_ids = {str(j["id"]) for j in jobs}
 
     for result in anthropic.messages.batches.results(batch_id):
-        custom_id = getattr(result, "custom_id", None)
-        outcome = getattr(result, "result", None)
-        if getattr(outcome, "type", None) != "succeeded":
-            errored += 1
-            # Fail open: mark geo_filtered=true, keep is_active=true.
-            if custom_id and custom_id in job_ids:
-                pass_ids.append(custom_id)
-            continue
-        message = getattr(outcome, "message", None)
-        if not message:
-            errored += 1
-            # Same fail-open contract as the outer error branch.
-            if custom_id and custom_id in job_ids:
-                pass_ids.append(custom_id)
-            continue
-        usage = getattr(message, "usage", None)
-        if usage:
-            input_tokens_total += getattr(usage, "input_tokens", 0) or 0
-            output_tokens_total += getattr(usage, "output_tokens", 0) or 0
-        text = ""
-        for block in getattr(message, "content", []) or []:
-            if getattr(block, "type", None) == "text":
-                text = getattr(block, "text", "") or ""
-                break
-        parsed = _extract_json(text)
-        if not parsed or custom_id not in job_ids:
-            parse_failed += 1
-            if custom_id and custom_id in job_ids:
-                pass_ids.append(custom_id)  # fail open on parse error
-            continue
-        eligible = parsed.get("eligible")
-        if eligible is False:
-            reason = str(parsed.get("reason") or "geo_filtered").strip()[:200]
-            fail_records.append((custom_id, reason))
-        else:
-            pass_ids.append(custom_id)
+        _in, _out, _pf, _err = _process_batch_results(
+            [result], job_ids, pass_ids, fail_records
+        )
+        input_tokens_total  += _in
+        output_tokens_total += _out
+        parse_failed        += _pf
+        errored             += _err
 
     print(
         f"  [parse] pass={len(pass_ids)}  fail={len(fail_records)}  "

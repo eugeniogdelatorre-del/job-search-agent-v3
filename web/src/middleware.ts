@@ -39,6 +39,11 @@ function buildCsp(): string {
     "object-src 'none'",
     `img-src 'self' data: blob: ${supabaseHost ? `https://${supabaseHost}` : ''}`.trim(),
     `connect-src 'self' ${supabaseOrigin}`.trim(),
+    // Audit L8 (2026-05-20): unsafe-inline is retained deliberately — Next.js
+    // inline scripts (hydration chunks) and Tailwind/CSS-in-JS require it
+    // until a nonce-based CSP is wired up. Follow-up: add a nonce via
+    // middleware headers and pass it through the root layout to eliminate
+    // unsafe-inline. Track at: TODO(nonce-csp)
     "script-src 'self' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data: https://fonts.gstatic.com",

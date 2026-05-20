@@ -24,11 +24,13 @@ import time
 # for >25 minutes on 2026-05-07 (run #25493119564). The 25-minute cap was
 # too aggressive: it killed the poll mid-batch, which orphans the batch
 # (Anthropic still bills for it once it completes) and skips the
-# write-back. Bumped to 50 minutes; the surrounding workflow's
-# `timeout-minutes` is bumped to 55 so we still leave 5 minutes of slack
-# for write-back + spend logging.
+# write-back. Bumped to 50 minutes; then cut to 45 minutes (Audit M6,
+# 2026-05-20) so write-back + spend logging have a full 10-minute window
+# inside the surrounding workflow's `timeout-minutes: 55`. At 50 minutes
+# only 5 minutes remained — barely enough for a 1000-job upsert + Supabase
+# spend_tracking insert.
 DEFAULT_POLL_INTERVAL_SECONDS = 30
-DEFAULT_POLL_MAX_SECONDS = 50 * 60
+DEFAULT_POLL_MAX_SECONDS = 45 * 60
 
 
 def get_anthropic_client():

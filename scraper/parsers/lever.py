@@ -65,9 +65,18 @@ def parse(session: requests.Session, source: dict) -> list[dict]:
             continue
         description = (post.get("descriptionPlain") or post.get("description") or "")[:5000] or None
         salary = post.get("salaryRange") or {}
-        salary_min = salary.get("min")
-        salary_max = salary.get("max")
-        salary_source = "listed" if (salary_min or salary_max) else None
+        # Audit H4 (2026-05-20): gate on currency so GBP/EUR amounts are not
+        # stored as if they were USD. Empty string and absent currency are treated
+        # as USD (common in older Lever postings). Case-insensitive comparison.
+        currency = (salary.get("currency") or "").strip().upper()
+        if currency in ("", "USD"):
+            salary_min = salary.get("min")
+            salary_max = salary.get("max")
+            salary_source = "listed" if (salary_min or salary_max) else None
+        else:
+            salary_min = None
+            salary_max = None
+            salary_source = None
 
         out.append({
             "title": title,

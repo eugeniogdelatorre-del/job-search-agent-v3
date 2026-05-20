@@ -77,9 +77,11 @@ CACHE_READ_MULTIPLIER = 0.10
 # Lowered from 60 → 40 (2026-05-13): the rule scorer is keyword-heavy on the
 # title; creative Web3 titles like "Head of Brand", "Discord Lead",
 # "Ecosystem Catalyst" were silently scoring 40-59 and never reaching the AI.
-# At 40 we send substantially more jobs to Haiku, but per-stage budget cap
-# ($5/mo for cv_score) absorbs it comfortably. classify.py uses the same
-# constant; keep them in sync (it imports from here).
+# At 40 we send substantially more jobs to Haiku, but the per-stage budget
+# cap ($20/mo for cv_score; bumped from $5 then $12 during May remediation —
+# see scraper/budget.py STAGE_BUDGETS for current values) absorbs it
+# comfortably. classify.py uses the same constant; keep them in sync (it
+# imports from here).
 WARM_THRESHOLD = 40
 
 # Skip cv_score for jobs first seen more than this many days ago. Bumped
@@ -99,7 +101,8 @@ MAX_JOBS_PER_RUN = 1000
 # (see ``_detect_backlog_mode()`` below). Triggered when there are very
 # few job_scores rows for the active resume — usually because the CV
 # was just activated. We have room to drain the queue in one go without
-# tripping the $5/mo cv_score budget cap.
+# tripping the $20/mo cv_score stage cap (see scraper/budget.py
+# STAGE_BUDGETS — was $5 → $12 → $20 across the May remediation).
 MAX_JOBS_BACKLOG_DRAIN = 2000
 
 # When fewer than this many jobs are already scored for the active CV,
@@ -130,6 +133,20 @@ RESCUE_MIN_SKILL_HITS = 3
 RESCUE_CAP_PER_RUN = 100
 
 DESCRIPTION_MAX_CHARS = 3000  # per §4.2
+
+# Audit H6 (2026-05-20): strip common prompt-injection patterns from the
+# job description before inserting it into the scoring prompt. The
+# replacement token "[redacted]" is visible in the prompt so the model
+# knows something was there but can't act on it; silent deletion would
+# confuse the scoring (model sees a truncated description without context).
+import re as _re
+_INJECTION_RE = _re.compile(
+    r"(?:ignore\s+(?:previous|prior)\s+instructions"
+    r"|system\s*[:\xb7]"
+    r"|</?system>"
+    r"|disregard\s+all)",
+    _re.IGNORECASE,
+)
 
 SYSTEM_PREFIX = """\
 You are a precise job fit scoring engine. Score job listings against the candidate resume below.
@@ -238,7 +255,7 @@ Rules:
 
 
 def _fetch_active_resume(client) -> dict | None:
-    """Return the active CV row, or None.
+    """Return the active CV row for PIPELINE_OWNER_USER_ID, or None.
 
     Audit H27: previously used ``.maybe_single()`` which RAISES if more
     than one row matches (e.g. mid-migration with two active resumes by
@@ -247,8 +264,23 @@ def _fetch_active_resume(client) -> dict | None:
     "you have multiple active resumes." Switch to ``.limit(1)`` so the
     function returns the first match deterministically even when the
     invariant is broken — operator can clean up at their leisure.
+
+    Audit C2 (2026-05-19): scope the lookup by ``user_id`` so the
+    pipeline only ever services the owner's CV. When
+    ``PIPELINE_OWNER_USER_ID`` is unset we return None WITHOUT issuing
+    a query — falling through to a global SELECT would re-introduce
+    the bug. main() does an explicit fail-closed env check at startup
+    so under normal operation this fallback is unreachable.
     """
     if client is None:
+        return None
+    owner_id = supabase_client.get_pipeline_owner_user_id()
+    if not owner_id:
+        print(
+            "  [cv_score] PIPELINE_OWNER_USER_ID unset — refusing to issue "
+            "a global resumes SELECT (audit C2)",
+            file=sys.stderr,
+        )
         return None
     # Select skill_graph too — cv_score prefers it over parsed_text when
     # present (see _resolve_cv_payload below). Gracefully degrades if the
@@ -258,6 +290,7 @@ def _fetch_active_resume(client) -> dict | None:
         resp = (
             client.table("resumes")
             .select(select_cols)
+            .eq("user_id", owner_id)
             .eq("is_active", True)
             .order("id")  # deterministic tiebreaker if multiple are active
             .limit(1)
@@ -273,6 +306,7 @@ def _fetch_active_resume(client) -> dict | None:
                 resp = (
                     client.table("resumes")
                     .select("id,parsed_text,char_count")
+                    .eq("user_id", owner_id)
                     .eq("is_active", True)
                     .order("id")
                     .limit(1)
@@ -504,7 +538,9 @@ def _fetch_rescue_candidates(
 
 
 def _build_user_message(job: dict) -> str:
-    desc = (job.get("description") or "").strip()[:DESCRIPTION_MAX_CHARS]
+    raw_desc = (job.get("description") or "").strip()[:DESCRIPTION_MAX_CHARS]
+    # Audit H6: strip injection phrases before the description enters the prompt.
+    desc = _INJECTION_RE.sub("[redacted]", raw_desc)
     return USER_TEMPLATE.format(
         title=(job.get("title") or "")[:300],
         company=(job.get("company") or "Unknown"),
@@ -848,6 +884,19 @@ def main() -> int:
     if not has_ai_key and not args.dry:
         print("  [fatal] ANTHROPIC_API_KEY missing — add it to GitHub repo "
               "Settings → Secrets and variables → Actions", file=sys.stderr)
+        return 2
+
+    # Audit C2 (2026-05-19): fail-closed if the single-tenant lock isn't
+    # set. Otherwise _fetch_active_resume would refuse anyway, but a
+    # clear early error beats "no active resume found" for diagnostics.
+    if not supabase_client.get_pipeline_owner_user_id():
+        print(
+            "  [fatal] PIPELINE_OWNER_USER_ID missing — refusing to run. "
+            "Set it to the Supabase auth.users.id of the pipeline owner "
+            "in GitHub repo Settings → Secrets and variables → Actions. "
+            "(See REVIEW.md C2.)",
+            file=sys.stderr,
+        )
         return 2
 
     sb = supabase_client.get_client()

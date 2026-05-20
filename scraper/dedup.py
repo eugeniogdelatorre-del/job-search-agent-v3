@@ -77,12 +77,16 @@ def location_bucket(location: str | None) -> str:
         # remote duplicates DO collapse, which is what we want today.
         # See Audit M4 deferral note above for the planned refinement.
         return "remote"
-    # Strip punctuation/whitespace then take the leading 24 chars of
-    # the normalized form. Enough to distinguish "San Francisco" from
-    # "New York" and "Buenos Aires" from "Mexico City" without being
-    # so specific that "San Francisco, CA" and "San Francisco, USA"
-    # diverge.
-    cleaned = _WHITESPACE.sub(" ", _NON_WORD.sub(" ", n)).strip()
+    # L7: strip state/country suffix before normalising so "City, ST"
+    # and "City" produce the same bucket. Split on the first comma and
+    # take only the city portion; everything after the comma is a
+    # regional qualifier ("CA", "USA", "Argentina") that shouldn't
+    # differentiate duplicates.
+    city_part = n.split(",", 1)[0].strip() if "," in n else n
+    # Strip remaining punctuation/whitespace then take the leading 24
+    # chars. Enough to distinguish "San Francisco" from "New York" and
+    # "Buenos Aires" from "Mexico City".
+    cleaned = _WHITESPACE.sub(" ", _NON_WORD.sub(" ", city_part)).strip()
     return cleaned[:24] or "any"
 
 
@@ -123,10 +127,32 @@ def _is_valid_key(key: str | None) -> bool:
     return True
 
 
-def dedup_within_run(jobs: list[dict]) -> list[dict]:
-    """Collapse same-dedup_key jobs within a run, keeping highest source_tier.
+def _richness(job: dict) -> tuple[int, int, int]:
+    """Tiebreaker tuple — higher is better.
 
-    Ties on source_tier keep the first seen (stable).
+    Primary:   source_tier (direct-company > web3 aggregator > broad board)
+    Secondary: has a listed salary (proxy for "parser extracted structured data")
+    Tertiary:  description length (longer = more signal for cv_score)
+
+    Audit H2 (2026-05-20): the previous code used a strict ``>`` on
+    source_tier, so the FIRST row seen on a tier tie always won, even if
+    a later row had a 5000-char description and a listed salary while the
+    first had neither. Using a tuple comparison ensures the richest row
+    survives dedup regardless of insertion order.
+    """
+    has_salary = 1 if (job.get("salary_min_usd") or job.get("salary_max_usd")) else 0
+    desc_len = len(job.get("description") or "")
+    tier = int(job.get("source_tier") or 0)
+    return (tier, has_salary, desc_len)
+
+
+def dedup_within_run(jobs: list[dict]) -> list[dict]:
+    """Collapse same-dedup_key jobs within a run, keeping the richest row.
+
+    "Richest" is defined by ``_richness``: highest source_tier first,
+    then listed salary, then longest description. On a full tie the first
+    seen wins (stable).
+
     Rows with an invalid dedup_key (empty / ``"|"``) pass through
     untouched — they shouldn't share a bucket with each other or with
     well-formed rows.
@@ -139,9 +165,6 @@ def dedup_within_run(jobs: list[dict]) -> list[dict]:
             passthrough.append(job)
             continue
         current = best.get(key)
-        if current is None:
-            best[key] = job
-            continue
-        if (job.get("source_tier") or 0) > (current.get("source_tier") or 0):
+        if current is None or _richness(job) > _richness(current):
             best[key] = job
     return list(best.values()) + passthrough

@@ -193,7 +193,7 @@ def _job_to_row(job: dict, score: int, breakdown: dict) -> dict:
     populated — yielding a hybrid row that re-appears on /today with the
     rejection metadata still attached.
     """
-    return {
+    row = {
         "dedup_key": job["dedup_key"],
         "title": (job.get("title") or "").strip()[:500],
         "company": (job.get("company") or "").strip()[:200] or None,
@@ -203,14 +203,24 @@ def _job_to_row(job: dict, score: int, breakdown: dict) -> dict:
         "source": job["source"][:100],
         "source_tier": job["source_tier"],
         "source_url": (job.get("source_url") or "")[:1000] or None,
-        "salary_min_usd": job.get("salary_min_usd"),
-        "salary_max_usd": job.get("salary_max_usd"),
-        "salary_source": job.get("salary_source"),
         "score_total": score,
         "score_breakdown": breakdown,
         "last_seen_at": job["last_seen_at"],
         # Intentionally omit ``is_active`` — see docstring above.
     }
+    # Audit C5 (2026-05-19): only emit salary_* keys when the parser
+    # actually extracted a listed salary. The supabase_client upsert
+    # uses ``on_conflict="dedup_key"`` which translates to
+    # ``ON CONFLICT DO UPDATE SET col = EXCLUDED.col`` for every column
+    # in the payload — so unconditionally including
+    # ``salary_min_usd=None`` would null out whatever classify.py had
+    # extracted from the job description on the previous cycle (H17
+    # fixed the inverse bug inside classify; C5 closes the round trip).
+    if job.get("salary_source") == "listed":
+        row["salary_min_usd"] = job.get("salary_min_usd")
+        row["salary_max_usd"] = job.get("salary_max_usd")
+        row["salary_source"] = "listed"
+    return row
 
 
 def main() -> int:
