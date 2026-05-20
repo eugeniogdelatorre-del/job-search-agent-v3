@@ -28,7 +28,7 @@ Personal Web3 job-search automation. Scrapes ~268 sources daily, deduplicates, r
 
 ## Cost
 
-Hard cap: **$8/mo** enforced in code (Resend alert email on trip). Projected ~$0.22/mo at current volumes. Budget ceiling $10/mo. See [`docs/COST_MATH.md`](docs/COST_MATH.md).
+Hard cap: **$30/mo** enforced in code (Resend alert email on trip), with per-stage sub-caps `classify $5 / geo_filter $5 / cv_score $20`. Projected ~$0.22/mo at current volumes; the headroom absorbs CV-swap backlog drains and one-off remediation runs. See [`docs/COST_MATH.md`](docs/COST_MATH.md).
 
 ## Architecture
 

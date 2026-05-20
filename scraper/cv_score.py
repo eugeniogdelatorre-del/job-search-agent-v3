@@ -77,9 +77,11 @@ CACHE_READ_MULTIPLIER = 0.10
 # Lowered from 60 → 40 (2026-05-13): the rule scorer is keyword-heavy on the
 # title; creative Web3 titles like "Head of Brand", "Discord Lead",
 # "Ecosystem Catalyst" were silently scoring 40-59 and never reaching the AI.
-# At 40 we send substantially more jobs to Haiku, but per-stage budget cap
-# ($5/mo for cv_score) absorbs it comfortably. classify.py uses the same
-# constant; keep them in sync (it imports from here).
+# At 40 we send substantially more jobs to Haiku, but the per-stage budget
+# cap ($20/mo for cv_score; bumped from $5 then $12 during May remediation —
+# see scraper/budget.py STAGE_BUDGETS for current values) absorbs it
+# comfortably. classify.py uses the same constant; keep them in sync (it
+# imports from here).
 WARM_THRESHOLD = 40
 
 # Skip cv_score for jobs first seen more than this many days ago. Bumped
@@ -99,7 +101,8 @@ MAX_JOBS_PER_RUN = 1000
 # (see ``_detect_backlog_mode()`` below). Triggered when there are very
 # few job_scores rows for the active resume — usually because the CV
 # was just activated. We have room to drain the queue in one go without
-# tripping the $5/mo cv_score budget cap.
+# tripping the $20/mo cv_score stage cap (see scraper/budget.py
+# STAGE_BUDGETS — was $5 → $12 → $20 across the May remediation).
 MAX_JOBS_BACKLOG_DRAIN = 2000
 
 # When fewer than this many jobs are already scored for the active CV,
