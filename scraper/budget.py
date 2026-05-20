@@ -101,13 +101,20 @@ def month_to_date_spend(client, operation: str | None = None) -> float:
     the global total across all stages.
 
     Pages through results so the PostgREST default max-rows ceiling does
-    not silently under-count. Fail-soft on transient errors (return 0.0)
-    to preserve the original policy: a Supabase hiccup shouldn't stall
-    classify/cv_score when actual spend is tiny. Fail-closed (+inf, which
-    trips the >= cap check in ``assert_under_budget``) only on the
-    specific cases where the query *succeeded* but the result is
-    suspicious — paginated past the safety cap, or the exact-count
-    returned by Supabase disagrees with what we drained.
+    not silently under-count. Fail-CLOSED (+inf, which trips the >= cap
+    check in ``assert_under_budget``) on ANY of:
+      * an exception escaping the spend query (network blip, PostgREST
+        503, schema drift, malformed row, etc.) — see Audit C3,
+        2026-05-19. Previously this path returned 0.0 ("fail-soft"),
+        which silently passed the kill-switch and let a runaway loop
+        keep spending while Supabase was unreachable. The fix is
+        intentionally blunt: if we cannot prove MTD spend is under the
+        cap, we treat it as over.
+      * paginated past the safety cap (suggests >50k spend rows this
+        month — something is broken).
+      * the exact-count returned by Supabase disagrees with what we
+        drained (we missed a page).
+    Only ``client is None`` returns 0.0 (used in --dry runs and tests).
     """
     if client is None:
         return 0.0
@@ -153,8 +160,17 @@ def month_to_date_spend(client, operation: str | None = None) -> float:
             return float("inf")
         return round(total, 6)
     except Exception as e:
-        print(f"  [budget] month_to_date_spend failed (treating as 0): {e}", file=sys.stderr)
-        return 0.0
+        # Audit C3 (2026-05-19): fail CLOSED. The previous polarity
+        # (return 0.0) silently defeated the kill switch whenever the
+        # spend query itself raised — exactly the moment we most want
+        # to stop spending. +inf trips the >= cap check upstream so
+        # assert_under_budget raises BudgetExceeded.
+        print(
+            f"  [budget] month_to_date_spend FAILED — treating as over-cap "
+            f"so we don't accidentally fail open: {e}",
+            file=sys.stderr,
+        )
+        return float("inf")
 
 
 def _send_cap_alert(spent: float, cap_usd: float, operation: str | None, *, scope: str) -> None:
