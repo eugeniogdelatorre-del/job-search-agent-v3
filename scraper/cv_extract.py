@@ -37,6 +37,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scraper._anthropic_batch import extract_json as _extract_json
+from scraper import budget as _budget
 
 # Same model as the rest of the AI pipeline. Non-batch (~2× cost) but
 # tiny — this runs once per CV, not per job.
@@ -228,6 +229,16 @@ def extract_skill_graph(anthropic_client, resume_text: str, supabase_client=None
     """
     if anthropic_client is None or not resume_text:
         return None
+
+    # Audit H5 (2026-05-20): gate on the global budget before spending.
+    # cv_extract is called lazily from cv_score (after cv_score's own budget
+    # check), but it may also be invoked directly. Checking here is the
+    # defence-in-depth that ensures no Anthropic call goes out when the
+    # monthly cap is already hit. Skip the check when supabase_client is
+    # None (dry run / test without a live DB — no spend data to query).
+    if supabase_client is not None:
+        _budget.assert_under_budget(supabase_client, operation="cv_extract")
+
     snippet = resume_text[:MAX_CV_CHARS]
     try:
         msg = anthropic_client.messages.create(
