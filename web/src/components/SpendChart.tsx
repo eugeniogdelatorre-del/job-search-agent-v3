@@ -58,6 +58,14 @@ export function SpendChart({
   }
   const opEntries = Array.from(byOp.entries()).sort((a, b) => b[1].cost - a[1].cost)
   const cvScore = byOp.get('cv_score')
+  // Audit M10 (2026-05-20): cv_score._log_spend packs cache_write_tokens
+  // into input_tokens (spend_tracking.input_tokens = actual_input +
+  // cache_write). The denominator therefore includes cache_write, making
+  // the cache-read % look lower than reality on backlog-drain days where
+  // cache_write is large. To fix accurately requires splitting
+  // cache_write_input_tokens into its own column in spend_tracking.
+  // Until then this metric is directionally correct but slightly pessimistic.
+  // TODO: add cache_write_input_tokens column + update _log_spend in cv_score.
   const cacheReadPct = cvScore && (cvScore.input + cvScore.cached) > 0
     ? (cvScore.cached / (cvScore.input + cvScore.cached)) * 100
     : null

@@ -147,6 +147,13 @@ export async function POST(req: NextRequest) {
       // might not be visible yet on the SELECT's connection. Short retry
       // absorbs the lag (~50ms is plenty for Supabase's intra-region
       // pooler latency).
+      // Audit M8 (2026-05-20): 3 total attempts — attempt 0 is the initial
+      // try (no sleep), attempts 1 and 2 are retries with 50 ms backoff.
+      // The sleep guard `if (attempt > 0)` means attempt 0 runs immediately,
+      // giving us 1 initial + 2 retries, not "3 retries". This is intentional
+      // (total = retries + 1); documented here so the next reader doesn't
+      // "fix" it by removing the guard and adding an extra sleep before the
+      // first try.
       for (let attempt = 0; attempt < 3; attempt++) {
         if (attempt > 0) await new Promise((r) => setTimeout(r, 50))
         const { data: existing } = await supabase

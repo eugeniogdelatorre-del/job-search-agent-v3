@@ -157,7 +157,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
 _PERIOD_MONTH = r"\b(?:mes|month|mo|monthly)\b"
 _PERIOD_HOUR = r"\b(?:hour|hr|h)\b"
 _HOURLY = re.compile(
-    rf"\$?(\d+)\s*[-\u2013]?\s*\$?(\d*)\s*/\s*{_PERIOD_HOUR}",
+    rf"\$(\d+)\s*[-\u2013]?\s*\$?(\d*)\s*/\s*{_PERIOD_HOUR}",
     re.IGNORECASE,
 )
 _MONTHLY_RANGE = re.compile(
