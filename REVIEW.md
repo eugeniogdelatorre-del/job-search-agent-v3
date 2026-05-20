@@ -9,7 +9,44 @@ Top 3 to fix today:
 2. **C3** — `month_to_date_spend` returns `0.0` on any unexpected exception, defeating the kill switch. The surrounding comment says it fails closed; the code disagrees.
 3. **C2** — scope "active resume" to a real owner. With the signup allowlist now at three emails, `cv_score` / `geo_filter` / `weekly_summary` may score against someone else's CV; the digest only ever ships to Eugenio.
 
-## Critical (5)
+## Critical (7) — 5 original + 2 from Supabase security advisor (2026-05-20)
+
+### C6: `public.schema_migrations` readable by anonymous callers (RLS disabled)
+- **Source:** Supabase security advisor email, 2026-05-20
+- **Table:** `public.schema_migrations` (`rowsecurity = false`)
+- **Risk:** The `anon` role has `SELECT` on the `public` schema by default. With RLS
+  disabled, any unauthenticated caller can `GET /rest/v1/schema_migrations` and read
+  the full migration history — table names, column additions, function bodies — giving
+  an attacker a detailed map of the schema before they probe further.
+- **Fix:** Enable RLS with no permissive policies. Default-deny blocks anon/authenticated
+  roles; the service-role key used by CI and the Python scraper bypasses RLS so the
+  pipeline is unaffected.
+  ```sql
+  ALTER TABLE public.schema_migrations ENABLE ROW LEVEL SECURITY;
+  ```
+  Migration file: `docs/migrations/2026-05-20-schema-migrations-rls.sql`
+- **Status: FIXED 2026-05-20.** Applied via Supabase MCP
+  (`migration name: enable_rls_schema_migrations`). `rowsecurity = true` confirmed.
+- **Test:** `scraper/tests/test_security_migrations.py` (3 tests — file exists, contains
+  `ENABLE ROW LEVEL SECURITY`, targets `schema_migrations`).
+
+### C7: `public.set_active_resume` — SECURITY DEFINER audit
+- **Source:** Supabase security advisor email, 2026-05-20
+- **Function:** `public.set_active_resume(p_resume_id uuid)`
+- **Concern:** `SECURITY DEFINER` functions run with the definer's privileges (typically
+  `postgres`/superuser). If the function doesn't verify `auth.uid()` before acting, any
+  authenticated caller can activate any user's resume.
+- **Audit result: ALREADY SECURE.** The function body (inspected 2026-05-20 via
+  `pg_get_functiondef`) contains:
+  1. `v_caller := auth.uid()` — reads caller from the session token
+  2. `IF v_caller IS NULL THEN RAISE EXCEPTION` — rejects unauthenticated calls
+  3. `IF NOT EXISTS (SELECT 1 FROM resumes WHERE id = p_resume_id AND user_id = v_caller)`
+     `THEN RAISE EXCEPTION 'resume not found or not owned by caller'` — ownership gate
+  4. `UPDATE resumes … WHERE user_id = v_caller` — write scoped to caller only
+  No fix required. The `SECURITY DEFINER` is legitimate here: the function needs to
+  bypass RLS on `resumes` to do the set-wise swap, but it re-implements the ownership
+  check explicitly. The pattern is correct.
+- **Status: NO FIX NEEDED.** Documented for the record.
 
 ### C1: Budget cap and per-stage caps drift across three files (and counting)
 - **Files:**
