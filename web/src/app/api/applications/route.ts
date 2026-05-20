@@ -84,8 +84,16 @@ export async function POST(req: NextRequest) {
   }
 
   const status: ApplicationStatus = body.status ?? 'saved'
-  if (!APPLICATION_STATUSES.includes(status)) {
-    return NextResponse.json({ error: 'invalid status' }, { status: 400 })
+  // Audit H7 (2026-05-20): restrict POST to initial statuses only.
+  // Later transitions (applied → interview → offer) must go through PATCH
+  // so the kanban funnel analytics are never skipped. Allowing arbitrary
+  // status on POST lets a caller land directly in "offer" with no history.
+  const INITIAL_STATUSES: ApplicationStatus[] = ['saved', 'applied']
+  if (!INITIAL_STATUSES.includes(status)) {
+    return NextResponse.json(
+      { error: 'POST status must be "saved" or "applied"; later transitions go via PATCH' },
+      { status: 400 },
+    )
   }
 
   // Audit H13: race-safe idempotency. Previously this did SELECT then
