@@ -442,6 +442,80 @@ def _log_spend(client, *, input_tokens: int, output_tokens: int, cost_usd: float
         print(f"  [supabase] spend_tracking insert failed: {e}", file=sys.stderr)
 
 
+def _process_batch_results(
+    results,
+    job_ids: set,
+    pass_ids: list,
+    fail_records: list,
+) -> tuple[int, int, int, int]:
+    """Process a sequence of Anthropic batch result objects.
+
+    Returns (input_tokens, output_tokens, parse_failed, errored).
+
+    Audit H3 (2026-05-20): the previous inline loop accumulated token
+    counts ONLY for succeeded outcomes — errored results hit ``continue``
+    before the usage block. Anthropic bills input tokens on errored
+    requests too (the model received and processed the prompt). This
+    helper moves usage accumulation BEFORE any ``continue`` so errored
+    outcomes are properly counted.
+
+    Extracted as a standalone function so it can be unit-tested without
+    a real Anthropic client.
+    """
+    input_tokens = 0
+    output_tokens = 0
+    parse_failed = 0
+    errored = 0
+
+    for result in results:
+        custom_id   = getattr(result, "custom_id", None)
+        outcome     = getattr(result, "result",    None)
+        outcome_type = getattr(outcome, "type",    None)
+        message     = getattr(outcome, "message",  None)
+
+        # Audit H3: accumulate usage BEFORE any early continue so errored
+        # outcomes (which Anthropic still bills input tokens for) are counted.
+        if message is not None:
+            usage = getattr(message, "usage", None)
+            if usage:
+                input_tokens  += getattr(usage, "input_tokens",  0) or 0
+                output_tokens += getattr(usage, "output_tokens", 0) or 0
+
+        if outcome_type != "succeeded":
+            errored += 1
+            # Fail open: mark geo_filtered=true, keep is_active=true.
+            if custom_id and custom_id in job_ids:
+                pass_ids.append(custom_id)
+            continue
+
+        if not message:
+            errored += 1
+            # Same fail-open contract as the outer error branch.
+            if custom_id and custom_id in job_ids:
+                pass_ids.append(custom_id)
+            continue
+
+        text = ""
+        for block in getattr(message, "content", []) or []:
+            if getattr(block, "type", None) == "text":
+                text = getattr(block, "text", "") or ""
+                break
+        parsed = _extract_json(text)
+        if not parsed or custom_id not in job_ids:
+            parse_failed += 1
+            if custom_id and custom_id in job_ids:
+                pass_ids.append(custom_id)  # fail open on parse error
+            continue
+        eligible = parsed.get("eligible")
+        if eligible is False:
+            reason = str(parsed.get("reason") or "geo_filtered").strip()[:200]
+            fail_records.append((custom_id, reason))
+        else:
+            pass_ids.append(custom_id)
+
+    return input_tokens, output_tokens, parse_failed, errored
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="AI geo-filter: mark location-ineligible jobs inactive.")
     ap.add_argument("--limit", type=int, default=MAX_JOBS_PER_RUN)
@@ -536,42 +610,13 @@ def main() -> int:
     job_ids = {str(j["id"]) for j in jobs}
 
     for result in anthropic.messages.batches.results(batch_id):
-        custom_id = getattr(result, "custom_id", None)
-        outcome = getattr(result, "result", None)
-        if getattr(outcome, "type", None) != "succeeded":
-            errored += 1
-            # Fail open: mark geo_filtered=true, keep is_active=true.
-            if custom_id and custom_id in job_ids:
-                pass_ids.append(custom_id)
-            continue
-        message = getattr(outcome, "message", None)
-        if not message:
-            errored += 1
-            # Same fail-open contract as the outer error branch.
-            if custom_id and custom_id in job_ids:
-                pass_ids.append(custom_id)
-            continue
-        usage = getattr(message, "usage", None)
-        if usage:
-            input_tokens_total += getattr(usage, "input_tokens", 0) or 0
-            output_tokens_total += getattr(usage, "output_tokens", 0) or 0
-        text = ""
-        for block in getattr(message, "content", []) or []:
-            if getattr(block, "type", None) == "text":
-                text = getattr(block, "text", "") or ""
-                break
-        parsed = _extract_json(text)
-        if not parsed or custom_id not in job_ids:
-            parse_failed += 1
-            if custom_id and custom_id in job_ids:
-                pass_ids.append(custom_id)  # fail open on parse error
-            continue
-        eligible = parsed.get("eligible")
-        if eligible is False:
-            reason = str(parsed.get("reason") or "geo_filtered").strip()[:200]
-            fail_records.append((custom_id, reason))
-        else:
-            pass_ids.append(custom_id)
+        _in, _out, _pf, _err = _process_batch_results(
+            [result], job_ids, pass_ids, fail_records
+        )
+        input_tokens_total  += _in
+        output_tokens_total += _out
+        parse_failed        += _pf
+        errored             += _err
 
     print(
         f"  [parse] pass={len(pass_ids)}  fail={len(fail_records)}  "
