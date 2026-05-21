@@ -41,6 +41,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scraper import budget, supabase_client
+from scraper._prompt_safety import strip_injection as _strip_injection
 from scraper._anthropic_batch import (
     extract_json as _extract_json,
     get_anthropic_client as _get_anthropic_client,
@@ -134,19 +135,9 @@ RESCUE_CAP_PER_RUN = 100
 
 DESCRIPTION_MAX_CHARS = 3000  # per §4.2
 
-# Audit H6 (2026-05-20): strip common prompt-injection patterns from the
-# job description before inserting it into the scoring prompt. The
-# replacement token "[redacted]" is visible in the prompt so the model
-# knows something was there but can't act on it; silent deletion would
-# confuse the scoring (model sees a truncated description without context).
-import re as _re
-_INJECTION_RE = _re.compile(
-    r"(?:ignore\s+(?:previous|prior)\s+instructions"
-    r"|system\s*[:\xb7]"
-    r"|</?system>"
-    r"|disregard\s+all)",
-    _re.IGNORECASE,
-)
+# Audit H6 (2026-05-20) / C2-new (2026-05-20): prompt-injection strip.
+# Moved to scraper/_prompt_safety.py so classify.py and cv_score.py
+# share one regex — one diff to extend coverage for both callers.
 
 SYSTEM_PREFIX = """\
 You are a precise job fit scoring engine. Score job listings against the candidate resume below.
@@ -540,7 +531,7 @@ def _fetch_rescue_candidates(
 def _build_user_message(job: dict) -> str:
     raw_desc = (job.get("description") or "").strip()[:DESCRIPTION_MAX_CHARS]
     # Audit H6: strip injection phrases before the description enters the prompt.
-    desc = _INJECTION_RE.sub("[redacted]", raw_desc)
+    desc = _strip_injection(raw_desc)
     return USER_TEMPLATE.format(
         title=(job.get("title") or "")[:300],
         company=(job.get("company") or "Unknown"),
