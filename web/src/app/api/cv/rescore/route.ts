@@ -87,10 +87,10 @@ export async function POST(req: NextRequest) {
       if (/resume not found/i.test(rpcErr.message)) {
         return NextResponse.json({ error: 'resume not found' }, { status: 404 })
       }
-      return NextResponse.json(
-        { error: `activate failed: ${rpcErr.message}` },
-        { status: 500 }
-      )
+      // M1-new (2026-05-20): log PostgREST internals server-side only;
+      // rpcErr.message can contain constraint/function names.
+      console.error('[api/cv/rescore] set_active_resume failed:', rpcErr.message, rpcErr.code)
+      return NextResponse.json({ error: 'activate failed' }, { status: 500 })
     }
     activated = true
   }
@@ -108,11 +108,11 @@ export async function POST(req: NextRequest) {
 
   // GitHub returns 204 No Content on success
   if (!ghRes.ok) {
+    // M1-new (2026-05-20): GitHub error bodies can include partial repo
+    // metadata / PAT scope hints. Log server-side, return a generic message.
     const text = await ghRes.text().catch(() => '')
-    return NextResponse.json(
-      { error: `GitHub dispatch failed (${ghRes.status}): ${text}` },
-      { status: 502 }
-    )
+    console.error('[api/cv/rescore] GitHub dispatch failed:', ghRes.status, text)
+    return NextResponse.json({ error: 'GitHub dispatch failed' }, { status: 502 })
   }
 
   return NextResponse.json({

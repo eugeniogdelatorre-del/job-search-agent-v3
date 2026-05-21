@@ -83,12 +83,14 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PIPELINE_OWNER_USER_ID: ${{ secrets.PIPELINE_OWNER_USER_ID }}
         run: |
           set -euo pipefail
           missing=()
-          [ -z "${SUPABASE_URL:-}" ]         && missing+=("SUPABASE_URL")
-          [ -z "${SUPABASE_SERVICE_KEY:-}" ] && missing+=("SUPABASE_SERVICE_KEY")
-          [ -z "${ANTHROPIC_API_KEY:-}" ]    && missing+=("ANTHROPIC_API_KEY")
+          [ -z "${SUPABASE_URL:-}" ]             && missing+=("SUPABASE_URL")
+          [ -z "${SUPABASE_SERVICE_KEY:-}" ]     && missing+=("SUPABASE_SERVICE_KEY")
+          [ -z "${ANTHROPIC_API_KEY:-}" ]        && missing+=("ANTHROPIC_API_KEY")
+          [ -z "${PIPELINE_OWNER_USER_ID:-}" ]   && missing+=("PIPELINE_OWNER_USER_ID")
           if [ ${#missing[@]} -ne 0 ]; then
             echo "::error::Missing required secrets: ${missing[*]}" >&2
             exit 1
@@ -110,6 +112,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          PIPELINE_OWNER_USER_ID: ${{ secrets.PIPELINE_OWNER_USER_ID }}
         run: python scraper/classify.py
 
   geo-filter:
@@ -138,12 +141,14 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PIPELINE_OWNER_USER_ID: ${{ secrets.PIPELINE_OWNER_USER_ID }}
         run: |
           set -euo pipefail
           missing=()
-          [ -z "${SUPABASE_URL:-}" ]         && missing+=("SUPABASE_URL")
-          [ -z "${SUPABASE_SERVICE_KEY:-}" ] && missing+=("SUPABASE_SERVICE_KEY")
-          [ -z "${ANTHROPIC_API_KEY:-}" ]    && missing+=("ANTHROPIC_API_KEY")
+          [ -z "${SUPABASE_URL:-}" ]             && missing+=("SUPABASE_URL")
+          [ -z "${SUPABASE_SERVICE_KEY:-}" ]     && missing+=("SUPABASE_SERVICE_KEY")
+          [ -z "${ANTHROPIC_API_KEY:-}" ]        && missing+=("ANTHROPIC_API_KEY")
+          [ -z "${PIPELINE_OWNER_USER_ID:-}" ]   && missing+=("PIPELINE_OWNER_USER_ID")
           if [ ${#missing[@]} -ne 0 ]; then
             echo "::error::Missing required secrets: ${missing[*]}" >&2
             exit 1
@@ -164,6 +169,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PIPELINE_OWNER_USER_ID: ${{ secrets.PIPELINE_OWNER_USER_ID }}
           CANDIDATE_LOCATION: ${{ vars.CANDIDATE_LOCATION }}
         run: python scraper/geo_filter.py
 
@@ -188,12 +194,14 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PIPELINE_OWNER_USER_ID: ${{ secrets.PIPELINE_OWNER_USER_ID }}
         run: |
           set -euo pipefail
           missing=()
-          [ -z "${SUPABASE_URL:-}" ]         && missing+=("SUPABASE_URL")
-          [ -z "${SUPABASE_SERVICE_KEY:-}" ] && missing+=("SUPABASE_SERVICE_KEY")
-          [ -z "${ANTHROPIC_API_KEY:-}" ]    && missing+=("ANTHROPIC_API_KEY")
+          [ -z "${SUPABASE_URL:-}" ]             && missing+=("SUPABASE_URL")
+          [ -z "${SUPABASE_SERVICE_KEY:-}" ]     && missing+=("SUPABASE_SERVICE_KEY")
+          [ -z "${ANTHROPIC_API_KEY:-}" ]        && missing+=("ANTHROPIC_API_KEY")
+          [ -z "${PIPELINE_OWNER_USER_ID:-}" ]   && missing+=("PIPELINE_OWNER_USER_ID")
           if [ ${#missing[@]} -ne 0 ]; then
             echo "::error::Missing required secrets: ${missing[*]}" >&2
             exit 1
@@ -215,6 +223,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          PIPELINE_OWNER_USER_ID: ${{ secrets.PIPELINE_OWNER_USER_ID }}
         run: python scraper/cv_score.py
 
   # Audit H5: notify once if *any* stage fails. `if: failure()` becomes true

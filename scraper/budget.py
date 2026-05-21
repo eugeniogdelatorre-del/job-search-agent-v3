@@ -50,12 +50,17 @@ BUDGET_CAP_USD = 30.00
 #                    ~$0.45 instead of ~$2; daily steady-state ~$0.05.
 #                    $20 absorbs ~40 backlog-drain runs in a single month
 #                    if anything goes sideways before tripping.
-# Sum to $30 = global cap so a stage trip never leaves global headroom
-# uncovered.
+# Stage caps are per-op early-warning trips; the global $30 cap is the
+# hard ceiling regardless of the sum of stage caps.
 STAGE_BUDGETS: dict[str, float] = {
     "classify":    5.00,
     "geo_filter":  5.00,
     "cv_score":   20.00,
+    # M5-new (2026-05-20): cv_extract was only guarded by the global cap.
+    # At ~$0.005/CV-swap the blast radius is small today, but every paid
+    # op should have a per-stage circuit-breaker. $1 absorbs ~200
+    # CV re-extractions before tripping a loop early.
+    "cv_extract":  1.00,
 }
 
 ALERT_RECIPIENT = "eugeniogdelatorre@gmail.com"

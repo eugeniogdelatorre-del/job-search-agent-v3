@@ -63,6 +63,17 @@ export async function GET() {
     rows.push(...batch)
     if (batch.length < PAGE) break  // last page
   }
+  // M3-new (2026-05-20): fail loud if pagination cap was hit. Silently
+  // breaking would under-count MTD, making the UI show headroom that the
+  // Python kill-switch doesn't see. Mirror scraper/budget.py's fail-closed
+  // philosophy: a wrong total is worse than an error the operator notices.
+  if (rows.length >= MAX_PAGES * PAGE) {
+    console.error('[api/spend] paged past MAX_PAGES safety cap — MTD total is under-counted')
+    return NextResponse.json(
+      { error: 'spend data exceeds dashboard cap; check scraper logs' },
+      { status: 500 },
+    )
+  }
   const mtd_usd = rows.reduce((acc, r) => acc + Number(r.cost_usd ?? 0), 0)
 
   return NextResponse.json(

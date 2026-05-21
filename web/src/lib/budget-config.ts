@@ -22,7 +22,9 @@ export const MONTHLY_CAP_USD = 30
 // currently shown anywhere in the UI but reserved for an upcoming
 // per-stage progress widget on /settings.
 export const STAGE_CAPS_USD = {
-  classify:   5,
-  geo_filter: 5,
-  cv_score:  20,
+  classify:    5,
+  geo_filter:  5,
+  cv_score:   20,
+  // M5-new (2026-05-20): added cv_extract per-stage cap to scraper/budget.py.
+  cv_extract:  1,
 } as const

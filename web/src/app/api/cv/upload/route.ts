@@ -181,6 +181,20 @@ export async function POST(req: NextRequest) {
       .single())
   }
 
+  // M4-new (2026-05-20): TOCTOU on first-resume auto-activate. Two
+  // simultaneous uploads both see count=0, both try is_active=true, and
+  // the unique partial index (user_id WHERE is_active=true) rejects the
+  // second with 23505. Catch that specific case and retry as inactive —
+  // the race-winner is already active, so inactive is correct here.
+  if (error?.code === '23505' && isFirst) {
+    insertRow.is_active = false
+    ;({ data: inserted, error } = await supabase
+      .from('resumes')
+      .insert(insertRow)
+      .select('id, is_active')
+      .single())
+  }
+
   if (error || !inserted) {
     // Audit M6: don't leak PostgREST internals.
     console.error('[api/cv/upload] insert failed:', error?.message, error?.code)

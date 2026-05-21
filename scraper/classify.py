@@ -34,6 +34,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scraper import budget, supabase_client
+from scraper._prompt_safety import strip_injection as _strip_injection
 from scraper._anthropic_batch import (
     extract_json as _extract_json,
     get_anthropic_client as _get_anthropic_client,
@@ -165,7 +166,12 @@ def _fetch_unclassified_jobs(client, limit: int) -> list[dict]:
 
 
 def _build_user_message(job: dict) -> str:
-    desc = (job.get("description") or "").strip()[:DESCRIPTION_MAX_CHARS]
+    # C2-new (2026-05-20): strip prompt-injection phrases before building
+    # the user message. classify runs FIRST in the pipeline so injected
+    # classifications propagate downstream. Uses the shared helper in
+    # scraper/_prompt_safety.py so cv_score and classify stay in sync.
+    raw_desc = (job.get("description") or "").strip()[:DESCRIPTION_MAX_CHARS]
+    desc = _strip_injection(raw_desc)
     return USER_TEMPLATE.format(
         title=(job.get("title") or "")[:300],
         company=(job.get("company") or "") or "Unknown",
@@ -214,7 +220,11 @@ def _clamp_int_or_none(value) -> int | None:
         n = int(value)
     except (TypeError, ValueError):
         return None
-    if n <= 0 or n > 10_000_000:
+    # L2-new (2026-05-20): tighter ceiling. $10M was above the top of any
+    # legitimate Web3 base salary; $2M is still well above real ranges
+    # (~$500k max) while bounding any injection-pushed value to something
+    # that at least doesn't look absurd in the UI or trip salary filters.
+    if n <= 0 or n > 2_000_000:
         return None
     return n
 
