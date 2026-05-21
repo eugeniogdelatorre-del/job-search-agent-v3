@@ -53,12 +53,14 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PIPELINE_OWNER_USER_ID: ${{ secrets.PIPELINE_OWNER_USER_ID }}
         run: |
           set -euo pipefail
           missing=()
-          [ -z "${SUPABASE_URL:-}" ]         && missing+=("SUPABASE_URL")
-          [ -z "${SUPABASE_SERVICE_KEY:-}" ] && missing+=("SUPABASE_SERVICE_KEY")
-          [ -z "${ANTHROPIC_API_KEY:-}" ]    && missing+=("ANTHROPIC_API_KEY")
+          [ -z "${SUPABASE_URL:-}" ]             && missing+=("SUPABASE_URL")
+          [ -z "${SUPABASE_SERVICE_KEY:-}" ]     && missing+=("SUPABASE_SERVICE_KEY")
+          [ -z "${ANTHROPIC_API_KEY:-}" ]        && missing+=("ANTHROPIC_API_KEY")
+          [ -z "${PIPELINE_OWNER_USER_ID:-}" ]   && missing+=("PIPELINE_OWNER_USER_ID")
           if [ ${#missing[@]} -ne 0 ]; then
             echo "::error::Missing required secrets: ${missing[*]}" >&2
             exit 1
@@ -79,6 +81,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PIPELINE_OWNER_USER_ID: ${{ secrets.PIPELINE_OWNER_USER_ID }}
           # Operator decision (2026-05-13): kept as ``vars.`` since the
           # candidate city isn't considered sensitive. If that ever
           # changes, swap the prefix to ``secrets.`` — the Python side

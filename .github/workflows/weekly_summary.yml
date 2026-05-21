@@ -53,6 +53,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           WEB_BASE_URL: ${{ vars.WEB_BASE_URL }}
+          PIPELINE_OWNER_USER_ID: ${{ secrets.PIPELINE_OWNER_USER_ID }}
           # Quoted as data via env var — never interpolate ${{ inputs.* }}
           # directly into a `run:` block. See SECURITY note in repo audit.
           DRY_INPUT: ${{ github.event.inputs.dry }}
