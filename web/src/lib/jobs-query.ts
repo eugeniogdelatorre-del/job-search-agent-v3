@@ -253,7 +253,12 @@ export async function queryJobs(opts: QueryOpts): Promise<QueryResult> {
     .range(offset, offset + limit - 1)
 
   const { data, error, count } = await query
-  if (error) return { rows: [], total: null, error: error.message }
+  // M2-new (2026-05-20): don't surface PostgREST internals (join column
+  // names, constraint names) to callers. Log server-side, return generic.
+  if (error) {
+    console.error('[queryJobs] query failed:', error.message, error.code)
+    return { rows: [], total: null, error: 'query failed' }
+  }
 
   return {
     rows: (data ?? []) as JobWithScore[],

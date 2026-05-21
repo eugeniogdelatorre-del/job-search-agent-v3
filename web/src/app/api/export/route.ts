@@ -16,7 +16,13 @@ const MAX_ROWS = 2000
 
 function csvEscape(v: unknown): string {
   if (v === null || v === undefined) return ''
-  const s = String(v)
+  let s = String(v)
+  // H1-new (2026-05-20): formula-injection guard (CWE-1236). Excel, Google
+  // Sheets, and LibreOffice execute cells whose first character is =, +, -,
+  // @, tab, or CR as formulas. Prefix with a single quote so the spreadsheet
+  // treats them as literal text (OWASP recommendation). The quote is hidden
+  // from display in most spreadsheet apps.
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
   return s
 }

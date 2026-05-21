@@ -220,7 +220,11 @@ def _clamp_int_or_none(value) -> int | None:
         n = int(value)
     except (TypeError, ValueError):
         return None
-    if n <= 0 or n > 10_000_000:
+    # L2-new (2026-05-20): tighter ceiling. $10M was above the top of any
+    # legitimate Web3 base salary; $2M is still well above real ranges
+    # (~$500k max) while bounding any injection-pushed value to something
+    # that at least doesn't look absurd in the UI or trip salary filters.
+    if n <= 0 or n > 2_000_000:
         return None
     return n
 
