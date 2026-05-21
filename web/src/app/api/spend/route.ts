@@ -39,6 +39,7 @@ export async function GET() {
     model: string | null
     cost_usd: number | null
     input_tokens: number | null
+    cache_write_input_tokens: number | null
     cached_input_tokens: number | null
     output_tokens: number | null
   }
@@ -48,7 +49,7 @@ export async function GET() {
     const to   = from + PAGE - 1
     const { data, error } = await supabase
       .from('spend_tracking')
-      .select('run_at, operation, model, cost_usd, input_tokens, cached_input_tokens, output_tokens')
+      .select('run_at, operation, model, cost_usd, input_tokens, cache_write_input_tokens, cached_input_tokens, output_tokens')
       .gte('run_at', monthStart.toISOString())
       .order('run_at', { ascending: true })
       .range(from, to)

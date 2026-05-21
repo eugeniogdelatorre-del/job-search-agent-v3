@@ -828,18 +828,21 @@ def _log_spend(
 ) -> None:
     if client is None:
         return
-    # spend_tracking columns: input_tokens, cached_input_tokens, output_tokens.
-    # We pack cache_read under cached_input_tokens and put cache_write in
-    # the notes so the MTD sum in budget.py stays driven by cost_usd.
+    # Housekeeping #2 (2026-05-21): cache_write_tokens now goes into its own
+    # column (cache_write_input_tokens) rather than being packed into
+    # input_tokens. The three Anthropic token buckets are independently
+    # observable: input_tokens (fresh) / cache_write_input_tokens (written to
+    # cache) / cached_input_tokens (served from cache).
     row = {
         "run_at": datetime.now(timezone.utc).isoformat(),
         "operation": "cv_score",
         "model": MODEL,
-        "input_tokens": input_tokens + cache_write_tokens,
+        "input_tokens": input_tokens,
+        "cache_write_input_tokens": cache_write_tokens,
         "cached_input_tokens": cache_read_tokens,
         "output_tokens": output_tokens,
         "cost_usd": cost_usd,
-        "notes": (f"cache_write={cache_write_tokens} " + notes)[:500],
+        "notes": notes[:500],
     }
     try:
         client.table("spend_tracking").insert(row).execute()

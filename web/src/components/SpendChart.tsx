@@ -9,12 +9,13 @@
 import { formatUsd } from '@/lib/format'
 
 type SpendRow = {
-  run_at:                 string
-  operation:              string
-  cost_usd:               number
-  input_tokens?:          number | null
-  cached_input_tokens?:   number | null
-  output_tokens?:         number | null
+  run_at:                       string
+  operation:                    string
+  cost_usd:                     number
+  input_tokens?:                number | null
+  cache_write_input_tokens?:    number | null
+  cached_input_tokens?:         number | null
+  output_tokens?:               number | null
 }
 
 const OP_COLOR: Record<string, string> = {
@@ -42,32 +43,30 @@ export function SpendChart({
     cost: number
     calls: number
     input: number
+    cache_write: number
     cached: number
     output: number
   }
   const byOp = new Map<string, OpRoll>()
   for (const r of rows) {
     const op = r.operation || 'unknown'
-    const cur = byOp.get(op) ?? { cost: 0, calls: 0, input: 0, cached: 0, output: 0 }
-    cur.cost   += Number(r.cost_usd ?? 0)
-    cur.calls  += 1
-    cur.input  += Number(r.input_tokens ?? 0)
-    cur.cached += Number(r.cached_input_tokens ?? 0)
-    cur.output += Number(r.output_tokens ?? 0)
+    const cur = byOp.get(op) ?? { cost: 0, calls: 0, input: 0, cache_write: 0, cached: 0, output: 0 }
+    cur.cost        += Number(r.cost_usd ?? 0)
+    cur.calls       += 1
+    cur.input       += Number(r.input_tokens ?? 0)
+    cur.cache_write += Number(r.cache_write_input_tokens ?? 0)
+    cur.cached      += Number(r.cached_input_tokens ?? 0)
+    cur.output      += Number(r.output_tokens ?? 0)
     byOp.set(op, cur)
   }
   const opEntries = Array.from(byOp.entries()).sort((a, b) => b[1].cost - a[1].cost)
   const cvScore = byOp.get('cv_score')
-  // Audit M10 (2026-05-20): cv_score._log_spend packs cache_write_tokens
-  // into input_tokens (spend_tracking.input_tokens = actual_input +
-  // cache_write). The denominator therefore includes cache_write, making
-  // the cache-read % look lower than reality on backlog-drain days where
-  // cache_write is large. To fix accurately requires splitting
-  // cache_write_input_tokens into its own column in spend_tracking.
-  // Until then this metric is directionally correct but slightly pessimistic.
-  // TODO: add cache_write_input_tokens column + update _log_spend in cv_score.
-  const cacheReadPct = cvScore && (cvScore.input + cvScore.cached) > 0
-    ? (cvScore.cached / (cvScore.input + cvScore.cached)) * 100
+  // Housekeeping #2 (2026-05-21): cache_write_input_tokens is now its own
+  // column (migration 011). The denominator is the sum of all three Anthropic
+  // token buckets: fresh input + cache-write + cache-read. This gives the
+  // exact fraction of prompt tokens that were served from the cache.
+  const cacheReadPct = cvScore && (cvScore.input + cvScore.cache_write + cvScore.cached) > 0
+    ? (cvScore.cached / (cvScore.input + cvScore.cache_write + cvScore.cached)) * 100
     : null
 
   // ---- Daily stacked bars ------------------------------------------------

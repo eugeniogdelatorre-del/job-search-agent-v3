@@ -1,3 +1,13 @@
+# Canonical dependency list for the scraper pipeline.
+# GitHub Actions installs directly from this file (`pip install -r scraper/requirements.txt`).
+# pyproject.toml in this directory carries tool config (ruff, mypy, pytest) but
+# intentionally has no [project.dependencies] section — requirements.txt is the
+# single source of truth for installed packages. If you add a dependency, add it
+# here AND document it in pyproject.toml's [project] description if notable.
+#
+# anthropic pin: >=0.40 ensures the extended-cache-ttl-2025-04-11 beta header
+# and Batch API are available. The <1 upper bound guards against breaking
+# changes in a future v1 major release.
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 lxml>=5.0.0

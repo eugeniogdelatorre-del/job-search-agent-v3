@@ -3,6 +3,10 @@ name = "job-search-agent-v3-scraper"
 version = "0.1.0"
 description = "Scraper + AI classification + CV scoring pipeline for job-search-agent-v3"
 requires-python = ">=3.12"
+# Note: runtime dependencies are declared in requirements.txt (not here).
+# This file is intentionally limited to tool configuration (ruff, mypy, pytest).
+# GitHub Actions installs from requirements.txt directly. If you need `pip install .`
+# to work, mirror requirements.txt into a [project.dependencies] section here.
 
 [tool.ruff]
 line-length = 100
