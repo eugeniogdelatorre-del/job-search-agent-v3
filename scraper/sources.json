@@ -2311,6 +2311,81 @@
           "name": "REAP Global",
           "url": "https://reap.global/resources/company/careers",
           "category": "VC"
+        },
+        {
+          "name": "Fun.xyz",
+          "url": "https://fun.xyz/careers",
+          "category": "Infra"
+        },
+        {
+          "name": "Cycles",
+          "url": "https://job-boards.greenhouse.io/cycles",
+          "category": "Payments"
+        },
+        {
+          "name": "Bitso",
+          "url": "https://bitso.com/jobs",
+          "category": "CEX"
+        },
+        {
+          "name": "Lemon",
+          "url": "https://work.lemon.me/#jobs",
+          "category": "CEX"
+        },
+        {
+          "name": "Buda",
+          "url": "https://www.buda.com/trabaja-en-buda",
+          "category": "CEX"
+        },
+        {
+          "name": "Pomelo",
+          "url": "https://pomelo.la/empresa/trabaja-con-nosotros#postulate",
+          "category": "Payments"
+        },
+        {
+          "name": "Cheesecake Labs",
+          "url": "https://cheesecakelabs.com/careers#open-positions",
+          "category": "Infra"
+        },
+        {
+          "name": "Rather Labs",
+          "url": "https://www.ratherlabs.com/careers",
+          "category": "Infra"
+        },
+        {
+          "name": "Augustus",
+          "url": "https://augustus.com/careers",
+          "category": "DeFi"
+        },
+        {
+          "name": "Turnkey",
+          "url": "https://job-boards.greenhouse.io/turnkeycareers",
+          "category": "Infra"
+        },
+        {
+          "name": "Judgment Labs",
+          "url": "https://www.judgmentlabs.ai/careers",
+          "category": "AI"
+        },
+        {
+          "name": "TownSq",
+          "url": "https://www.townsq.xyz/careers#open-roles",
+          "category": "DeFi"
+        },
+        {
+          "name": "Didit",
+          "url": "https://didit.jobs.personio.com/",
+          "category": "Infra"
+        },
+        {
+          "name": "Fold",
+          "url": "https://ats.rippling.com/fold-inc/jobs",
+          "category": "Payments"
+        },
+        {
+          "name": "Nala",
+          "url": "https://apply.workable.com/nalamoney/",
+          "category": "Payments"
         }
       ]
     },
