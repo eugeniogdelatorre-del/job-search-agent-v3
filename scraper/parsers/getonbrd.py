@@ -85,10 +85,13 @@ def _normalize_salary(min_v, max_v) -> tuple[int | None, int | None]:
     lo, hi = _i(min_v), _i(max_v)
     if lo is None and hi is None:
         return (None, None)
-    # If max is below threshold (and present), treat both as monthly.
-    if hi is not None and hi <= _MONTHLY_USD_THRESHOLD:
-        lo = lo * 12 if lo else lo
-        hi = hi * 12
+    # Decide monthly-vs-annual from whichever bound is present (a min-only
+    # listing like $3,000/mo must annualise too), then ×12 every present
+    # bound. Prefer the upper bound as the reference when both exist.
+    ref = hi if hi is not None else lo
+    if ref is not None and ref <= _MONTHLY_USD_THRESHOLD:
+        lo = lo * 12 if lo is not None else None
+        hi = hi * 12 if hi is not None else None
     return (lo, hi)
 
 
