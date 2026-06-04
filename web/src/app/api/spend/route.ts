@@ -28,11 +28,10 @@ export async function GET() {
   const now = new Date()
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
 
-  // Audit M5: `spend_tracking` is currently a global table (no user_id
-  // column — every pipeline run shares one). Since this is single-tenant
-  // today the response is fine, but mark the cache as `private` so a
-  // shared cache (Vercel CDN, browser back-cache) can't leak it to a
-  // future second user. Document the intent.
+  // Audit M5: `spend_tracking` rows are scoped to the authenticated user
+  // via the user_id column (added 2026-05-21). RLS enforces the filter on
+  // the database side; we also pass .eq('user_id', user.id) explicitly so
+  // the intent is clear at the query level.
   type SpendRow = {
     run_at: string
     operation: string | null
@@ -42,6 +41,7 @@ export async function GET() {
     cache_write_input_tokens: number | null
     cached_input_tokens: number | null
     output_tokens: number | null
+    user_id?: string | null
   }
   const rows: SpendRow[] = []
   for (let i = 0; i < MAX_PAGES; i += 1) {
@@ -50,6 +50,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('spend_tracking')
       .select('run_at, operation, model, cost_usd, input_tokens, cache_write_input_tokens, cached_input_tokens, output_tokens')
+      .eq('user_id', user.id)
       .gte('run_at', monthStart.toISOString())
       .order('run_at', { ascending: true })
       .range(from, to)
@@ -86,9 +87,8 @@ export async function GET() {
     },
     {
       headers: {
-        // Currently global data — but `private` prevents shared caches
-        // from serving it to another user if the table ever gets a
-        // user_id dimension.
+        // User-scoped data — `private` ensures shared caches (Vercel CDN,
+        // browser back-cache) cannot serve this response to another user.
         'cache-control': 'private, max-age=10',
       },
     },

@@ -38,6 +38,7 @@ if __package__ in (None, ""):
 
 from scraper._anthropic_batch import extract_json as _extract_json
 from scraper import budget as _budget
+from scraper import supabase_client as _supabase_client
 
 # Same model as the rest of the AI pipeline. Non-batch (~2× cost) but
 # tiny — this runs once per CV, not per job.
@@ -204,6 +205,7 @@ def _log_spend(supabase_client, msg, notes: str) -> None:
         "cached_input_tokens": 0,
         "output_tokens": out_tok,
         "cost_usd": cost,
+        "user_id": _supabase_client.get_pipeline_owner_user_id(),
         "notes": notes[:500],
     }
     try:

@@ -324,6 +324,7 @@ def main() -> int:
                 "output_tokens": 0,
                 "cost_usd": 0,
                 "notes": f"top {len(rows)} jobs · {LOOKBACK_DAYS}d lookback",
+                "user_id": supabase_client.get_pipeline_owner_user_id(),
             }
         ).execute()
     except Exception as e:

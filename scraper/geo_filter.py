@@ -439,6 +439,7 @@ def _log_spend(client, *, input_tokens: int, output_tokens: int, cost_usd: float
         "output_tokens": output_tokens,
         "cost_usd": cost_usd,
         "notes": notes[:500],
+        "user_id": supabase_client.get_pipeline_owner_user_id(),
     }
     try:
         client.table("spend_tracking").insert(row).execute()
