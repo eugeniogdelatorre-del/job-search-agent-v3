@@ -26,20 +26,25 @@ export default async function TodayPage({
 
   const filters = parseFilters(searchParams)
 
-  // Run jobs query + applications count in parallel for the stats bar.
-  // We DON'T pass requireScored here so `total` reflects every indexed
-  // job in scope — the "indexed" stat shouldn't shrink when the AI is
-  // behind. The card grid below uses requireScored=true to hide unscored
-  // rows; counts and visuals are intentionally decoupled.
-  const [jobsResult, appCountResult] = await Promise.all([
-    queryJobs({ filters, scopeSinceDays: 1, limit: 60, withCount: true }),
+  // Stats bar queries (parallel):
+  //  - indexedResult: every indexed job in scope (no requireScored) → the
+  //    "indexed" total shouldn't shrink when the AI is behind.
+  //  - scoredResult:  requireScored over the FULL scope (withCount) so the
+  //    "scored" count and "avg match" reflect every scored job, not just the
+  //    60 cards rendered below. (Audit 2026-06-04 #11: previously derived from
+  //    the limit:60 grid sample, which under-counted past 60 jobs/day.)
+  //  - appCountResult: saved-applications count for the authed user.
+  // The card grid (JobList) is decoupled and fetches its own 60-row page.
+  const STAT_SCORED_CAP = 1000  // PostgREST page ceiling; avg samples up to this
+  const [indexedResult, scoredResult, appCountResult] = await Promise.all([
+    queryJobs({ filters, scopeSinceDays: 1, limit: 1, withCount: true }),
+    queryJobs({ filters, scopeSinceDays: 1, limit: STAT_SCORED_CAP, withCount: true, requireScored: true }),
     supabase.from('applications').select('id', { count: 'exact', head: true }),
   ])
 
-  const { rows, total } = jobsResult
-  const indexed     = total ?? rows.length
-  const scored      = rows.filter((r) => r.job_scores?.[0]?.match_score != null).length
-  const matchScores = rows.flatMap((r) => r.job_scores ?? []).map((s) => s.match_score).filter((s): s is number => s != null)
+  const indexed     = indexedResult.total ?? indexedResult.rows.length
+  const scored      = scoredResult.total ?? scoredResult.rows.length
+  const matchScores = scoredResult.rows.flatMap((r) => r.job_scores ?? []).map((s) => s.match_score).filter((s): s is number => s != null)
   const avgMatch    = matchScores.length > 0 ? Math.round(matchScores.reduce((a, b) => a + b, 0) / matchScores.length) : null
   const savedCount  = appCountResult.count ?? 0
 
