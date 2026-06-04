@@ -20,10 +20,15 @@ import re
 # heavily.  Extend the alternation here if new vectors are found; both
 # callers benefit from a single edit.
 _INJECTION_RE = re.compile(
-    r"(?:ignore\s+(?:previous|prior)\s+instructions"
+    # "ignore/disregard/forget [all|the|your|any] previous|prior|above|earlier
+    #  instructions|prompt(s)" — tolerant of an optional qualifier and several
+    #  target words, since "ignore all previous instructions" and "ignore the
+    #  above instructions" are the common real-world variants.
+    r"(?:(?:ignore|disregard|forget)\s+(?:all\s+|the\s+|your\s+|any\s+|these\s+)?"
+    r"(?:previous|prior|above|earlier|preceding)\s+(?:instructions?|prompts?)"
+    r"|disregard\s+all"
     r"|system\s*[:\xb7]"        # "System:" or "System·"
     r"|</?system>"               # XML-style <system> / </system>
-    r"|disregard\s+all"
     r"|###\s*instructions?"      # markdown heading attack
     r"|<\|im_start\|>\s*system"  # chat-template injection
     r")",
