@@ -27,6 +27,7 @@ export default async function ResumePage() {
     .select('id, filename, char_count, is_active, created_at')
     .order('created_at', { ascending: false })
 
+  if (error) console.error('[resume] load failed:', error.message, error.code)
   const resumes = (data ?? []) as ResumeRow[]
 
   return (
@@ -52,7 +53,7 @@ export default async function ResumePage() {
 
         {error && (
           <div className="rounded-lg p-3 font-mono text-sm" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.3)', color: '#F87171' }}>
-            Failed to load: {error.message}
+            Failed to load — try again
           </div>
         )}
 
