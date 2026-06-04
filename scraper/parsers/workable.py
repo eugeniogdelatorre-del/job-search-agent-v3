@@ -34,7 +34,10 @@ name = "workable"
 # Match slugs from apply.workable.com paths. Slugs are alphanumerics + hyphens,
 # always lowercase in practice. Tolerant of trailing slash and query.
 _WORKABLE_URL = re.compile(
-    r"https?://apply\.workable\.com/(?P<slug>[a-z0-9][a-z0-9\-_]*)",
+    # ``/j/<shortcode>`` is Workable's reserved per-job apply path (we build
+    # such URLs ourselves below), never an account board — exclude it so it
+    # isn't mistaken for an account slug of "j".
+    r"https?://apply\.workable\.com/(?!j/)(?P<slug>[a-z0-9][a-z0-9\-_]*)",
     re.IGNORECASE,
 )
 
