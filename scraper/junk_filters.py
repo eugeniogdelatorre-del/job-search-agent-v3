@@ -70,7 +70,7 @@ AGGREGATOR_COMPANIES = {
 
 WWR_SPLIT = re.compile(
     r"^(?P<title>.+?)"                                         # real job title
-    r"(?P<age>\d+[dmhw]|\d+mo|Featured|Top\s*\d+)"            # age/badge token
+    r"(?P<age>\d+mo|\d+[dmhw]|Featured|Top\s*\d+)"            # age/badge token (mo before [dmhw])
     r"(?P<company>.+?)"                                        # company + maybe location
     r"(?P<emp>Full-Time|Part-Time|Contract|Freelance|Internship)"
     r"(?P<tail>.*)$"                                           # location + maybe salary

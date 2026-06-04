@@ -43,6 +43,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -521,6 +522,63 @@ def _process_batch_results(
     return input_tokens, output_tokens, parse_failed, errored
 
 
+# Audit M3 (2026-05-14): two-tier parse-fail gate. WARN at 5% (transient model
+# noise, fail-open is safe to absorb); FAIL the run at 20% (output genuinely
+# degraded — continuing to fail-open would flood /today with non-LATAM jobs).
+PARSE_FAIL_RATIO_WARN = 0.05
+PARSE_FAIL_RATIO_HARD_FAIL = 0.20
+
+
+def _parse_fail_status(parse_failed: int, total_results: int) -> str:
+    """Classify the parse-fail ratio as 'ok' | 'warn' | 'hard_fail'.
+
+    ``total_results`` MUST be the number of batch results returned (one per
+    job). 2026-06-04 fix: it must NOT be a sum of the pass/fail/errored
+    accumulators — errored and parse-failed jobs are appended to ``pass_ids``
+    (fail-open) *and* counted separately, so that sum double-counts them and
+    understates the true failure rate, weakening this circuit breaker.
+    """
+    if total_results <= 0:
+        return "ok"
+    ratio = parse_failed / total_results
+    if ratio > PARSE_FAIL_RATIO_HARD_FAIL:
+        return "hard_fail"
+    if ratio > PARSE_FAIL_RATIO_WARN:
+        return "warn"
+    return "ok"
+
+
+def _collect_batch_outcomes(results, job_ids):
+    """Fold every batch result into one summary, counting each result once.
+
+    Returns a SimpleNamespace with: pass_ids, fail_records, input_tokens,
+    output_tokens, parse_failed, errored, total_results. ``total_results`` is
+    the authoritative denominator for the parse-fail ratio.
+    """
+    pass_ids: list[str] = []
+    fail_records: list[tuple[str, str]] = []
+    input_tokens = output_tokens = parse_failed = errored = 0
+    total_results = 0
+    for result in results:
+        total_results += 1
+        _in, _out, _pf, _err = _process_batch_results(
+            [result], job_ids, pass_ids, fail_records
+        )
+        input_tokens += _in
+        output_tokens += _out
+        parse_failed += _pf
+        errored += _err
+    return SimpleNamespace(
+        pass_ids=pass_ids,
+        fail_records=fail_records,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        parse_failed=parse_failed,
+        errored=errored,
+        total_results=total_results,
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="AI geo-filter: mark location-ineligible jobs inactive.")
     ap.add_argument("--limit", type=int, default=MAX_JOBS_PER_RUN)
@@ -606,26 +664,22 @@ def main() -> int:
         print("  [anthropic] batch never ended — aborting", file=sys.stderr)
         return 4
 
-    input_tokens_total = 0
-    output_tokens_total = 0
-    pass_ids: list[str] = []
-    fail_records: list[tuple[str, str]] = []
-    parse_failed = 0
-    errored = 0
     job_ids = {str(j["id"]) for j in jobs}
-
-    for result in anthropic.messages.batches.results(batch_id):
-        _in, _out, _pf, _err = _process_batch_results(
-            [result], job_ids, pass_ids, fail_records
-        )
-        input_tokens_total  += _in
-        output_tokens_total += _out
-        parse_failed        += _pf
-        errored             += _err
+    summary = _collect_batch_outcomes(
+        anthropic.messages.batches.results(batch_id), job_ids
+    )
+    input_tokens_total = summary.input_tokens
+    output_tokens_total = summary.output_tokens
+    pass_ids = summary.pass_ids
+    fail_records = summary.fail_records
+    parse_failed = summary.parse_failed
+    errored = summary.errored
+    total_results = summary.total_results
 
     print(
         f"  [parse] pass={len(pass_ids)}  fail={len(fail_records)}  "
         f"parse_failed={parse_failed}  errored={errored}  "
+        f"total_results={total_results}  "
         f"input_tokens={input_tokens_total}  output_tokens={output_tokens_total}"
     )
 
@@ -643,13 +697,14 @@ def main() -> int:
     # non-LATAM jobs for the rest of the day. Workflow non-zero exit
     # triggers notify_on_failure so the operator sees the email instead
     # of having to notice missing cards.
-    PARSE_FAIL_RATIO_THRESHOLD = 0.05  # warn
-    PARSE_FAIL_RATIO_HARD_FAIL = 0.20  # exit 1
-    total_results = len(pass_ids) + len(fail_records) + parse_failed + errored
-    hard_fail = False
-    if total_results > 0:
+    # 2026-06-04 fix: denominator is summary.total_results (one per result),
+    # not the old len(pass_ids)+len(fail_records)+parse_failed+errored sum,
+    # which double-counted fail-open jobs and understated the ratio.
+    status = _parse_fail_status(parse_failed, total_results)
+    hard_fail = status == "hard_fail"
+    if total_results > 0 and status != "ok":
         parse_fail_ratio = parse_failed / total_results
-        if parse_fail_ratio > PARSE_FAIL_RATIO_HARD_FAIL:
+        if status == "hard_fail":
             print(
                 f"::error::geo_filter parse_failed ratio "
                 f"{parse_fail_ratio:.1%} ({parse_failed}/{total_results}) "
@@ -659,12 +714,11 @@ def main() -> int:
                 f"Inspect batch {batch_id}.",
                 file=sys.stderr,
             )
-            hard_fail = True
-        elif parse_fail_ratio > PARSE_FAIL_RATIO_THRESHOLD:
+        else:  # warn
             print(
                 f"::warning::geo_filter parse_failed ratio "
                 f"{parse_fail_ratio:.1%} ({parse_failed}/{total_results}) "
-                f"exceeds warn threshold {PARSE_FAIL_RATIO_THRESHOLD:.1%}. "
+                f"exceeds warn threshold {PARSE_FAIL_RATIO_WARN:.1%}. "
                 f"Model output may be drifting — inspect batch {batch_id} "
                 f"and consider re-running once the regression is fixed.",
                 file=sys.stderr,

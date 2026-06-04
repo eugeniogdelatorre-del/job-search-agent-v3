@@ -42,7 +42,7 @@ W3C_API_LIMIT = 100  # API max per call
 
 _ONCLICK_URL_RE = re.compile(r"tableTurboRowClick\(event,\s*['\"]([^'\"]+)['\"]\)")
 _SALARY_RE = re.compile(
-    r"\$\s*([\d]+)\s*k?\s*[-–]\s*\$?\s*([\d]+)\s*k?",
+    r"\$\s*([\d]+)\s*(k)?\s*[-–]\s*\$?\s*([\d]+)\s*(k)?",
     re.IGNORECASE,
 )
 
@@ -57,11 +57,11 @@ def _parse_salary(s: str) -> tuple[int | None, int | None, str | None]:
     m = _SALARY_RE.search(s)
     if not m:
         return (None, None, None)
-    lo = int(m.group(1))
-    hi = int(m.group(2))
-    if "k" in s.lower():
-        lo *= 1000
-        hi *= 1000
+    # Multiply each bound by 1000 only when *that* number carries a 'k'
+    # suffix — a stray 'k' elsewhere in the string (e.g. "Marketing") must
+    # not inflate a bare "$50 - $80" into "$50,000 - $80,000".
+    lo = int(m.group(1)) * (1000 if m.group(2) else 1)
+    hi = int(m.group(3)) * (1000 if m.group(4) else 1)
     if 0 < lo <= hi <= 2_000_000 and lo >= 10_000:
         return (lo, hi, "listed")
     return (None, None, None)

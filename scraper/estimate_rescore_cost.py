@@ -45,6 +45,7 @@ if __package__ in (None, ""):
 
 from scraper import supabase_client
 from scraper.budget import STAGE_BUDGETS, month_to_date_spend
+from scraper.cv_score import WARM_THRESHOLD
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +79,11 @@ def _cutoff_iso(days: int) -> str:
 
 def _count_cv_score_scope(client, cutoff_iso: str) -> int:
     """How many jobs cv_score would touch in a full rescore: active,
-    geo_filtered=true, score_total >= 60, first_seen_at >= cutoff."""
+    geo_filtered=true, score_total >= WARM_THRESHOLD, first_seen_at >= cutoff.
+
+    Uses cv_score.WARM_THRESHOLD (40) — the real eligibility floor — not a
+    hard-coded 60, so the 40-59 band isn't silently dropped from the estimate.
+    """
     if client is None:
         return 0
     try:
@@ -87,7 +92,7 @@ def _count_cv_score_scope(client, cutoff_iso: str) -> int:
             .select("id", count="exact", head=True)
             .eq("is_active", True)
             .eq("geo_filtered", True)
-            .gte("score_total", 60)
+            .gte("score_total", WARM_THRESHOLD)
             .gte("first_seen_at", cutoff_iso)
             .execute()
         )

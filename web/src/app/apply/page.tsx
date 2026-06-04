@@ -23,6 +23,7 @@ export default async function ApplyPage() {
     .eq('user_id', user.id)
     .order('updated_at', { ascending: false })
 
+  if (error) console.error('[apply] load failed:', error.message, error.code)
   const apps = (data ?? []) as Application[]
 
   return (
@@ -43,7 +44,7 @@ export default async function ApplyPage() {
 
       {error && (
         <p className="font-mono text-sm" style={{ color: '#F87171' }}>
-          Failed to load applications: {error.message}
+          Failed to load applications — try again
         </p>
       )}
 

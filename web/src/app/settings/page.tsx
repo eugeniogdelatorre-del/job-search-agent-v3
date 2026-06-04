@@ -42,6 +42,7 @@ export default async function SettingsPage() {
     model: string | null
     cost_usd: number | null
     input_tokens: number | null
+    cache_write_input_tokens: number | null
     cached_input_tokens: number | null
     output_tokens: number | null
   }> = []
@@ -51,7 +52,7 @@ export default async function SettingsPage() {
     const to   = from + SPEND_PAGE - 1
     const res  = await supabase
       .from('spend_tracking')
-      .select('run_at, operation, model, cost_usd, input_tokens, cached_input_tokens, output_tokens')
+      .select('run_at, operation, model, cost_usd, input_tokens, cache_write_input_tokens, cached_input_tokens, output_tokens')
       .gte('run_at', monthStart.toISOString())
       .order('run_at', { ascending: true })
       .range(from, to)
@@ -71,6 +72,7 @@ export default async function SettingsPage() {
       operation: r.operation,
       cost_usd: Number(r.cost_usd ?? 0),
       input_tokens: r.input_tokens,
+      cache_write_input_tokens: r.cache_write_input_tokens,
       cached_input_tokens: r.cached_input_tokens,
       output_tokens: r.output_tokens,
     }))
@@ -94,11 +96,18 @@ export default async function SettingsPage() {
       .eq('is_active', true)
       .order('first_seen_at', { ascending: false })  // stable order across pages
       .range(from, to)
-    if (res.error) { jobsErr = res.error.message; break }
+    if (res.error) {
+      // Scrub: log the PostgREST detail server-side, surface a generic flag.
+      console.error('[settings] jobs load failed:', res.error.message, res.error.code)
+      jobsErr = 'load failed'
+      break
+    }
     const batch = res.data ?? []
     allActiveJobs.push(...batch)
     if (batch.length < PAGE) break  // last page
   }
+  if (spendErr) console.error('[settings] spend load failed:', spendErr.message)
+  if (healthRes.error) console.error('[settings] source health load failed:', healthRes.error.message, healthRes.error.code)
 
   // Build per-source aggregates: live total (= active rows from this
   // source) and new today (= first_seen_at on or after UTC midnight).
@@ -130,7 +139,7 @@ export default async function SettingsPage() {
 
       {spendErr ? (
         <div className="rounded-lg p-4 font-mono text-sm" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.3)', color: '#F87171' }}>
-          Spend load failed: {spendErr.message}
+          Spend load failed — try again
         </div>
       ) : (
         <SpendChart rows={spendRows} capUsd={MONTHLY_CAP_USD} mtdUsd={mtdUsd} />
@@ -138,7 +147,7 @@ export default async function SettingsPage() {
 
       {healthRes.error || jobsErr ? (
         <div className="rounded-lg p-4 font-mono text-sm" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.3)', color: '#F87171' }}>
-          Source health load failed: {healthRes.error?.message ?? jobsErr}
+          Source health load failed — try again
         </div>
       ) : (
         <SourceHealthTable rows={healthRes.data ?? []} perSource={perSource} />
