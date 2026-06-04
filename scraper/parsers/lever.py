@@ -19,11 +19,22 @@ from .base import REQUEST_TIMEOUT_SECONDS
 name = "lever"
 
 
+# Lever marketing paths that live on the bare lever.co/<path> domain and are
+# NOT job boards. The bare-domain branch excludes these so they don't get sent
+# to api.lever.co (404 → source marked failed). Real bare-domain boards (e.g.
+# lever.co/Onehouse) still match because their slug isn't in this set.
+_LEVER_RESERVED = (
+    r"about|blog|customers|pricing|login|contact|careers|platform|product|"
+    r"resources|company|legal|privacy|terms|demo|plans|index|home|features|"
+    r"integrations|security|partners|press|events|support|help|status|api|"
+    r"developers|docs|solutions|customer-stories|request-demo"
+)
+
 _LEVER_URL = re.compile(
     r"https?://(?:"
     r"jobs\.lever\.co/(?P<slug1>[a-zA-Z0-9\-_]+)"
-    r"|(?:www\.)?lever\.co/(?P<slug3>[a-zA-Z0-9\-_]+)"
-    r"|(?P<slug2>[a-zA-Z0-9\-_]+)\.lever\.co"
+    r"|(?:www\.)?lever\.co/(?!(?:" + _LEVER_RESERVED + r")(?:[/?#]|$))(?P<slug3>[a-zA-Z0-9\-_]+)"
+    r"|(?!www\.)(?P<slug2>[a-zA-Z0-9\-_]+)\.lever\.co"
     r")",
     re.IGNORECASE,
 )
