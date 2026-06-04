@@ -11,6 +11,13 @@
 --
 -- Applied 2026-05-07 against project nqevtnhryjnlbzmiojyb via the
 -- Supabase MCP tool (migration name: widen_signup_allowlist_to_three_emails).
+--
+-- UPDATED 2026-06-04: narrowed back to the single owner. Federico and Ana
+-- removed from the allowlist per owner request ("leave eugenio as the solo
+-- allowed for now"). Re-applied to prod via Supabase MCP (migration name:
+-- narrow_signup_allowlist_to_owner). NOTE: this only blocks *new* signups —
+-- it does not revoke any account those two may already have created. Delete
+-- their auth.users rows separately if full revocation is required.
 
 CREATE OR REPLACE FUNCTION public.block_unauthorized_signups()
 RETURNS trigger
@@ -19,9 +26,7 @@ SET search_path TO ''
 AS $function$
 begin
   if new.email != ALL (ARRAY[
-    'eugeniogdelatorre@gmail.com',
-    'federicowalter11@gmail.com',
-    'anamarta.baptista@gmail.com'
+    'eugeniogdelatorre@gmail.com'
   ]::text[]) then
     raise exception 'Signup not allowed for %', new.email;
   end if;

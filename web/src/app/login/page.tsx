@@ -3,9 +3,7 @@
 // Magic-link sign-in — dark terminal redesign.
 // Allowlist enforced DB-side via the auth.users INSERT trigger
 // `block_unauthorized_signups`. Currently allows:
-//   - eugeniogdelatorre@gmail.com (owner)
-//   - federicowalter11@gmail.com
-//   - anamarta.baptista@gmail.com
+//   - eugeniogdelatorre@gmail.com (owner) — sole allowed signup as of 2026-06-04
 // To add more, edit `docs/migrations/2026-05-07-widen-signup-allowlist.sql`
 // (just append to ARRAY[...]) and re-run it via Supabase SQL editor or MCP.
 
