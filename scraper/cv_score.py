@@ -163,7 +163,7 @@ Pass cases: fully remote global, fully remote restricted to candidate's country/
 ### DIMENSION RULES
 **skill_match (max 15):** Full match=100% contribution. Adjacent/transferable=50-90% transfer factor. Missing creative skills (video, graphic design) = -1 to -2 pts. Signature skills with measurable achievements = +1 to +2 boost if role requires them.
 
-**industry_fit (max 20):** Exact vertical=18-20. Adjacent vertical=12-17. Partial match=7-11. Weak/no match=0-6. Web3/crypto/DeFi/GameFi/NFT/DAO roles get +15 pts applied as a POST-scoring adjustment (not in this dimension).
+**industry_fit (max 20):** Exact vertical=18-20. Adjacent vertical=12-17. Partial match=7-11. Weak/no match=0-6. The candidate targets 5 preferred verticals equally — Web3/crypto, Fintech/payments, AI/ML, SaaS/B2B, and Gaming — so score industry_fit on genuine CV adjacency to the role's vertical, NOT on which of these five it is. A small flat preference bonus for any preferred vertical is applied POST-scoring (see ADJUSTMENTS), not in this dimension.
 
 **title_alignment (max 25):** Perfect (same function category)=23-25. Similar (adjacent, meaningful overlap)=15-22. Long shot (different but evidenced bridge skill)=7-14. Mismatch=0-6. Determine from CV responsibilities, not just title.
 
@@ -176,7 +176,7 @@ Pass cases: fully remote global, fully remote restricted to candidate's country/
 ### ADJUSTMENTS (applied after summing dimensions)
 | Trigger | Amount |
 |---------|--------|
-| Role is Web3/crypto/DeFi/blockchain/NFT/DAO | +15 |
+| Role is in a preferred vertical: Web3/crypto/DeFi/blockchain/NFT/DAO, Fintech/payments, AI/ML, SaaS/B2B dev-tools, or Gaming | +5 |
 | Mandatory language in CV at stated proficiency | +10 |
 | Mandatory language absent from CV | -20 |
 | Optional language in CV | +5 |
