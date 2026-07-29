@@ -42,8 +42,16 @@ name = "getonbrd"
 # pasted.
 _URL_RE = re.compile(r"https?://(?:www\.)?getonbrd\.com", re.IGNORECASE)
 
-_JOBS_API = "https://www.getonbrd.com/api/v0/categories/programming/jobs"
+_JOBS_API_TEMPLATE = "https://www.getonbrd.com/api/v0/categories/{category}/jobs"
+_DEFAULT_CATEGORY = "programming"
 _COMPANY_API = "https://www.getonbrd.com/api/v0/companies/{id}"
+
+
+def _category(source: dict) -> str:
+    """GoB category slug to pull. Defaults to 'programming' for back-compat;
+    override per-source with a `getonbrd_category` field (e.g. 'marketing-sales')
+    to pull non-engineering, all-industry roles."""
+    return (source.get("getonbrd_category") or _DEFAULT_CATEGORY).strip()
 
 PAGE_LIMIT = 100
 MAX_PAGES = 5  # 500 jobs cap per source — same shape as workday.py
@@ -140,11 +148,12 @@ def parse(session: requests.Session, source: dict) -> list[dict]:
     out: list[dict] = []
     category = source.get("category")
     company_cache: dict[str, str] = {}
+    jobs_api = _JOBS_API_TEMPLATE.format(category=_category(source))
 
     for page in range(1, MAX_PAGES + 1):
         params = {"per_page": PAGE_LIMIT, "page": page}
         resp = session.get(
-            _JOBS_API,
+            jobs_api,
             params=params,
             timeout=REQUEST_TIMEOUT_SECONDS,
             headers={"Accept": "application/json"},
