@@ -95,9 +95,27 @@ DEFAULT_CONFIG: dict[str, Any] = {
         },
         "vertical_fit": {
             "weight": 0.20,
+            # 2026-06-04 multi-industry expansion: vertical_fit now rewards ANY
+            # of the 5 preferred verticals (web3, fintech, AI, SaaS, gaming),
+            # not web3 alone — web3 is no longer uniquely advantaged here.
+            # Short/ambiguous tokens (bare "ai"/"ml") are deliberately avoided
+            # because matching is substring-based over the whole blob.
             "boost_keywords": [
-                "defi", "rwa", "oracle", "gaming", "cex", "dex",
+                # web3 / crypto
+                "defi", "rwa", "oracle", "cex", "dex",
                 "layer 1", "layer 2", "l1", "l2", "stablecoin",
+                "blockchain", "web3", "crypto", "onchain", "on-chain",
+                # fintech / payments
+                "fintech", "payments", "neobank", "banking", "lending",
+                "remittance", "trading platform", "brokerage",
+                # AI / ML
+                "artificial intelligence", "machine learning", "ai startup",
+                "ai-powered", "generative ai", "llm", "ai platform",
+                # SaaS / B2B
+                "saas", "b2b", "developer tools", "devtools", "api platform",
+                "developer platform", "infrastructure platform",
+                # gaming
+                "gaming", "video game", "game studio", "gamedev",
             ],
             "neutral_keywords": ["nft", "bridge", "forensics", "services"],
             "penalty_keywords": [],
@@ -111,7 +129,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "boost_signals": [
                 "series b", "series c", "profitable", "revenue positive",
                 "top 100", "top 50", "top 20", "backed by",
+                # web3 VCs
                 "a16z", "paradigm", "sequoia", "pantera", "multicoin",
+                # 2026-06-04: general (non-web3) VCs so a fintech/AI/SaaS role
+                # backed by a top generalist fund isn't invisible to the scorer.
+                "accel", "y combinator", "lightspeed", "tiger global",
+                "greylock", "benchmark", "khosla", "index ventures",
+                "insight partners", "bessemer", "general catalyst", "founders fund",
             ],
             # 2026-05-13 (audit H-6): "bootstrapped" moved from penalty to
             # neutral. Profitable bootstrapped Web3 companies are often
