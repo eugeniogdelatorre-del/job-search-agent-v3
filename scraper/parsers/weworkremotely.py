@@ -32,9 +32,30 @@ WEB3_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 
+# 2026-06-04 multi-industry expansion: a source with wwr_filter="function"
+# keeps target-FUNCTION roles (community/growth/marketing/BD/content/devrel)
+# across ALL industries, instead of the web3 keyword gate. The AI CV scorer
+# then ranks the preferred industries up. Default (no field) = web3 filter.
+FUNCTION_KEYWORDS = re.compile(
+    r"\b(community|growth|marketing|content|brand|social\s*media|partnerships?|"
+    r"ecosystem|devrel|developer\s*relations|developer\s*advocate|"
+    r"developer\s*marketing|business\s*development|biz\s*dev|bizdev|ambassador|"
+    r"evangelis[tm]|advocacy|campaign|lifecycle|demand\s*gen|copywriter|"
+    r"editorial|comms|communications)\b",
+    re.IGNORECASE,
+)
+
 
 def can_parse(source: dict) -> bool:
     return WWR_HOST in (source.get("url") or "").lower()
+
+
+def _item_matches(source: dict, haystack: str) -> bool:
+    """Pick the relevance filter for this source: function-based (all
+    industries) when wwr_filter='function', else the default web3 gate."""
+    if (source.get("wwr_filter") or "web3").lower() == "function":
+        return bool(FUNCTION_KEYWORDS.search(haystack))
+    return bool(WEB3_KEYWORDS.search(haystack))
 
 
 def _strip_html(raw: str) -> str:
@@ -43,10 +64,6 @@ def _strip_html(raw: str) -> str:
     txt = html.unescape(raw)
     txt = re.sub(r"<[^>]+>", " ", txt)
     return re.sub(r"\s+", " ", txt).strip()
-
-
-def _is_web3_relevant(item_text: str) -> bool:
-    return bool(WEB3_KEYWORDS.search(item_text))
 
 
 def _split_title(mashed: str) -> tuple[str, str | None]:
@@ -87,9 +104,10 @@ def parse(session: requests.Session, source: dict) -> list[dict]:
         if not title_raw or not link:
             continue
 
-        # Keyword-filter the noisy feed for Web3 relevance.
+        # Filter the noisy feed: web3 by default, or target-function when the
+        # source opts into wwr_filter="function".
         haystack = " ".join([title_raw, cat, skills, description_raw[:2000]])
-        if not _is_web3_relevant(haystack):
+        if not _item_matches(source, haystack):
             continue
 
         job_title, company = _split_title(title_raw)
