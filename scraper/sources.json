@@ -1198,6 +1198,24 @@
           "name": "Get on Board",
           "url": "https://www.getonbrd.com/jobs",
           "category": "LATAM_Board"
+        },
+        {
+          "name": "WeWorkRemotely (Functions)",
+          "url": "https://weworkremotely.com/remote-jobs",
+          "wwr_filter": "function",
+          "category": "Remote_Board"
+        },
+        {
+          "name": "Get on Board (Marketing)",
+          "url": "https://www.getonbrd.com/empleos/categoria/digital-marketing",
+          "getonbrd_category": "digital-marketing",
+          "category": "LATAM_Board"
+        },
+        {
+          "name": "Get on Board (Sales)",
+          "url": "https://www.getonbrd.com/empleos/categoria/sales",
+          "getonbrd_category": "sales",
+          "category": "LATAM_Board"
         }
       ]
     },
@@ -2386,6 +2404,161 @@
           "name": "Nala",
           "url": "https://apply.workable.com/nalamoney/",
           "category": "Payments"
+        },
+        {
+          "name": "Stripe",
+          "url": "https://boards.greenhouse.io/stripe",
+          "category": "Fintech"
+        },
+        {
+          "name": "Mercury",
+          "url": "https://boards.greenhouse.io/mercury",
+          "category": "Fintech"
+        },
+        {
+          "name": "Brex",
+          "url": "https://boards.greenhouse.io/brex",
+          "category": "Fintech"
+        },
+        {
+          "name": "Chime",
+          "url": "https://boards.greenhouse.io/chime",
+          "category": "Fintech"
+        },
+        {
+          "name": "Affirm",
+          "url": "https://boards.greenhouse.io/affirm",
+          "category": "Fintech"
+        },
+        {
+          "name": "Plaid",
+          "url": "https://jobs.ashbyhq.com/plaid",
+          "category": "Fintech"
+        },
+        {
+          "name": "Anthropic",
+          "url": "https://boards.greenhouse.io/anthropic",
+          "category": "AI"
+        },
+        {
+          "name": "Scale AI",
+          "url": "https://boards.greenhouse.io/scaleai",
+          "category": "AI"
+        },
+        {
+          "name": "Hugging Face",
+          "url": "https://apply.workable.com/huggingface",
+          "category": "AI"
+        },
+        {
+          "name": "Together AI",
+          "url": "https://boards.greenhouse.io/togetherai",
+          "category": "AI"
+        },
+        {
+          "name": "OpenAI",
+          "url": "https://jobs.ashbyhq.com/openai",
+          "category": "AI"
+        },
+        {
+          "name": "Cohere",
+          "url": "https://jobs.ashbyhq.com/cohere",
+          "category": "AI"
+        },
+        {
+          "name": "Perplexity",
+          "url": "https://jobs.ashbyhq.com/perplexity",
+          "category": "AI"
+        },
+        {
+          "name": "ElevenLabs",
+          "url": "https://jobs.ashbyhq.com/elevenlabs",
+          "category": "AI"
+        },
+        {
+          "name": "Runway",
+          "url": "https://jobs.ashbyhq.com/runway",
+          "category": "AI"
+        },
+        {
+          "name": "Vercel",
+          "url": "https://boards.greenhouse.io/vercel",
+          "category": "SaaS"
+        },
+        {
+          "name": "Airtable",
+          "url": "https://boards.greenhouse.io/airtable",
+          "category": "SaaS"
+        },
+        {
+          "name": "Webflow",
+          "url": "https://boards.greenhouse.io/webflow",
+          "category": "SaaS"
+        },
+        {
+          "name": "Grafana Labs",
+          "url": "https://boards.greenhouse.io/grafanalabs",
+          "category": "SaaS"
+        },
+        {
+          "name": "Notion",
+          "url": "https://jobs.ashbyhq.com/notion",
+          "category": "SaaS"
+        },
+        {
+          "name": "Linear",
+          "url": "https://jobs.ashbyhq.com/linear",
+          "category": "SaaS"
+        },
+        {
+          "name": "Zapier",
+          "url": "https://jobs.ashbyhq.com/zapier",
+          "category": "SaaS"
+        },
+        {
+          "name": "PostHog",
+          "url": "https://jobs.ashbyhq.com/posthog",
+          "category": "SaaS"
+        },
+        {
+          "name": "Render",
+          "url": "https://jobs.ashbyhq.com/render",
+          "category": "SaaS"
+        },
+        {
+          "name": "Supabase",
+          "url": "https://jobs.ashbyhq.com/supabase",
+          "category": "SaaS"
+        },
+        {
+          "name": "Discord",
+          "url": "https://boards.greenhouse.io/discord",
+          "category": "Gaming"
+        },
+        {
+          "name": "Roblox",
+          "url": "https://boards.greenhouse.io/roblox",
+          "category": "Gaming"
+        },
+        {
+          "name": "Riot Games",
+          "url": "https://boards.greenhouse.io/riotgames",
+          "category": "Gaming"
+        },
+        {
+          "name": "Scopely",
+          "url": "https://boards.greenhouse.io/scopely",
+          "category": "Gaming"
+        },
+        {
+          "name": "Epic Games",
+          "url": "https://boards.greenhouse.io/epicgames",
+          "category": "Gaming"
+        },
+        {
+          "name": "Voodoo",
+          "url": "https://jobs.ashbyhq.com/voodoo",
+          "category": "Gaming"
         }
       ]
     },
