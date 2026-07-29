@@ -80,7 +80,7 @@ Return this exact shape:
   "function_category": "Community" | "Design" | "Engineering" | "Marketing" | "Operations" | "Sales" | "BizDev" | "Product" | "Other",
   "function_confidence": 0.0,
   "seniority": "Junior" | "Mid" | "Senior" | "Lead" | "Head" | "Executive" | "Unspecified",
-  "vertical": "DeFi" | "L1" | "L2" | "CEX" | "DEX" | "Gaming" | "Infrastructure" | "NFT" | "RWA" | "Oracles" | "AI-Crypto" | "Other",
+  "vertical": "DeFi" | "L1" | "L2" | "CEX" | "DEX" | "Gaming" | "Infrastructure" | "NFT" | "RWA" | "Oracles" | "AI-Crypto" | "Fintech" | "Payments" | "AI" | "SaaS" | "Other",
   "salary_min_usd": null,
   "salary_max_usd": null,
   "remote_status": "Remote" | "Hybrid" | "Onsite" | "Unspecified"
@@ -103,8 +103,12 @@ FUNCTION_CATEGORIES = {
 }
 SENIORITIES = {"Junior", "Mid", "Senior", "Lead", "Head", "Executive", "Unspecified"}
 VERTICALS = {
+    # web3 / crypto
     "DeFi", "L1", "L2", "CEX", "DEX", "Gaming",
-    "Infrastructure", "NFT", "RWA", "Oracles", "AI-Crypto", "Other",
+    "Infrastructure", "NFT", "RWA", "Oracles", "AI-Crypto",
+    # 2026-06-04 multi-industry expansion (non-web3 preferred industries)
+    "Fintech", "Payments", "AI", "SaaS",
+    "Other",
 }
 REMOTE_STATUSES = {"Remote", "Hybrid", "Onsite", "Unspecified"}
 
